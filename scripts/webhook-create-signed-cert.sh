@@ -107,8 +107,7 @@ ${kubectl} delete secret ${secret} 2>/dev/null || true
 ${kubectl} create secret generic ${secret} \
         --from-file=key.pem=${tmpdir}/server-key.pem \
         --from-file=cert.pem=${tmpdir}/server-cert.pem \
-        --dry-run -o yaml |
-    ${kubectl} -n ${namespace} apply -f -
+        -n "${namespace}"
 
 echo "Removing ${tmpdir}"
 rm -rf ${tmpdir}
