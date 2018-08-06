@@ -243,7 +243,7 @@ func createOp(res *poolResource, i int, resourceType string, target string) stri
 	return fmt.Sprintf(addResourceOp, target, i, resourceType, escapeName(resourceName), res.quantity.String())
 }
 
-func mutatePods(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
+func mutatePods(ar v1beta1.AdmissionReview, optIn bool) *v1beta1.AdmissionResponse {
 	var ops []string
 
 	glog.V(2).Info("mutating pods")
@@ -269,6 +269,15 @@ func mutatePods(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	// leave system-pods alone, they're supposed to have enough reserved CPU on each node
 	if pod.ObjectMeta.GetNamespace() == metav1.NamespaceSystem {
 		return &reviewResponse
+	}
+
+	if optIn {
+		val, ok := pod.GetLabels()["cpu-manager-pool-policy"]
+		if !ok || val != "enabled" {
+			// let this pod be scheduled on nodes which don't have cpu
+			// manager pool policy running
+			return &reviewResponse
+		}
 	}
 
 	for i := range pod.Spec.InitContainers {
@@ -314,7 +323,7 @@ func mutatePods(ar v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	return &reviewResponse
 }
 
-type admitFunc func(v1beta1.AdmissionReview) *v1beta1.AdmissionResponse
+type admitFunc func(v1beta1.AdmissionReview, bool) *v1beta1.AdmissionResponse
 
 func toAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 	return &v1beta1.AdmissionResponse{
@@ -324,7 +333,7 @@ func toAdmissionResponse(err error) *v1beta1.AdmissionResponse {
 	}
 }
 
-func serve(w http.ResponseWriter, r *http.Request, admit admitFunc) {
+func serve(w http.ResponseWriter, r *http.Request, admit admitFunc, optIn bool) {
 	var body []byte
 	var reviewResponse *v1beta1.AdmissionResponse
 	var reqUID types.UID
@@ -363,7 +372,7 @@ func serve(w http.ResponseWriter, r *http.Request, admit admitFunc) {
 			reviewResponse = toAdmissionResponse(err)
 		} else {
 			reqUID = ar.Request.UID
-			reviewResponse = admit(ar)
+			reviewResponse = admit(ar, optIn)
 		}
 	}
 	// glog.V(2).Info(fmt.Sprintf("sending response: %v", reviewResponse))
@@ -389,17 +398,15 @@ func serve(w http.ResponseWriter, r *http.Request, admit admitFunc) {
 	}
 }
 
-func servePods(w http.ResponseWriter, r *http.Request) {
-	serve(w, r, mutatePods)
-}
-
 func main() {
 	var certFile string
 	var keyFile string
+	var optIn bool
 
 	flag.StringVar(&certFile, "tls-cert-file", certFile,
 		"File containing the x509 Certificate for HTTPS. (CA cert, if any, concatenated after server cert).")
 	flag.StringVar(&keyFile, "tls-private-key-file", keyFile, "File containing the x509 private key matching --tls-cert-file.")
+	flag.BoolVar(&optIn, "opt-in", optIn, "Whether label 'cpu-manager-pool-policy=enabled' is required in pod spec for mutation.")
 
 	flag.Parse()
 
@@ -423,7 +430,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	http.HandleFunc("/pods", servePods)
+	servePodsOptIn := func(w http.ResponseWriter, r *http.Request) {
+		serve(w, r, mutatePods, optIn)
+	}
+
+	http.HandleFunc("/pods", servePodsOptIn)
 
 	glog.V(2).Info("Webhook started")
 
