@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: intel-cpu-pool-plugin
+  namespace: kube-system
+  labels:
+    app: intel-cpu-pool-plugin
+spec:
+  selector:
+    matchLabels:
+      app: intel-cpu-pool-plugin
+  template:
+    metadata:
+      labels:
+        app: intel-cpu-pool-plugin
+    spec:
+      containers:
+      - name: intel-cpu-pool-plugin
+        image: intel-cpu-pool-plugin:devel
+        imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+        - name: kubeletsockets
+          mountPath: /var/lib/kubelet/cpu-plugin
+      volumes:
+      - name: kubeletsockets
+        hostPath:
+          path: /var/lib/kubelet/cpu-plugin
+      - name: config-volume
+        configMap:
+          name: cpu-pool-plugin-config
