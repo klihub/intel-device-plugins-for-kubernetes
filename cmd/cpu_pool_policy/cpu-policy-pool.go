@@ -93,7 +93,7 @@ func (p *poolPolicy) Configure(s stub.State) error {
 
 func (p *poolPolicy) restoreState(s stub.State) error {
 	p.pools, _ = pool.NewPoolSet(nil)
-	p.pools.SetAllocator(cpumanager.TakeByTopology, p.topology)
+	p.pools.SetAllocator(TakeByTopology, p.topology)
 
 	if poolState, ok := s.GetPolicyEntry("pools"); ok {
 		if err := p.pools.UnmarshalJSON([]byte(poolState)); err != nil {
