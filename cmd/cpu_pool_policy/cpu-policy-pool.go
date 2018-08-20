@@ -79,6 +79,8 @@ func (p *poolPolicy) Configure(s stub.State) error {
 		return err
 	}
 
+	logInfo("Configuration: %s", cfg.String())
+
 	p.poolCfg = cfg
 
 	if err := p.pools.Reconfigure(p.poolCfg); err != nil {
