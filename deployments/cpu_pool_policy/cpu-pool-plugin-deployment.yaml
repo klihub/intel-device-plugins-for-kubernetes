@@ -16,7 +16,9 @@ spec:
     spec:
       containers:
       - name: intel-cpu-pool-plugin
-        image: intel-cpu-pool-plugin:devel
+        image: intel-cpu-pool-policy:devel
+        command: ["/usr/bin/intel_cpu_pool_policy"]
+        args: ["-logtostderr"]
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: config-volume
