@@ -18,11 +18,11 @@ spec:
       - name: intel-cpu-pool-plugin
         image: intel-cpu-pool-plugin:devel
         imagePullPolicy: IfNotPresent
-      volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
-        - name: kubeletsockets
-          mountPath: /var/lib/kubelet/cpu-plugin
+        volumeMounts:
+          - name: config-volume
+            mountPath: /etc/config
+          - name: kubeletsockets
+            mountPath: /var/lib/kubelet/cpu-plugin
       volumes:
       - name: kubeletsockets
         hostPath:
