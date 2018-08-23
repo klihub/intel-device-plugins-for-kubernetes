@@ -1,0 +1,37 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: metrics.cpu-pools.intel.com
+spec:
+  group: cpu-pools.intel.com
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    plural: metrics
+    singular: metric
+    kind: Metric
+  validation:
+    openAPIV3Schema:
+      required: ["spec"]
+      properties:
+        spec:
+          required: ["pools"]
+          properties:
+            pools:
+              description: A list of pool names and usage values.
+              type: array
+              properties:
+                items:
+                  properties:
+                    poolName:
+                      description: Name of the CPU pool
+                      type: string
+                    usage:
+                      description: Pool usage value in millicores.
+                      type: integer
+                  required:
+                  - poolName
+                  - usage
