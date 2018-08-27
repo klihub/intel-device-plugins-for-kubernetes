@@ -1,9 +1,9 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: metrics.cpu-pools.intel.com
+  name: metrics.cpupools.intel.com
 spec:
-  group: cpu-pools.intel.com
+  group: cpupools.intel.com
   versions:
     - name: v1alpha1
       served: true
