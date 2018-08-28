@@ -3,8 +3,11 @@ package v1alpha1
 import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 type Pool struct {
-	PoolName string `json:"poolName"`
-	Usage    int    `json:"usage"`
+	PoolName  string `json:"poolName"`
+	Usage     int    `json:"usage"`
+	Capacity  int    `json:"capacity"`
+	Exclusive string `json:"exclusive"`
+	Shared    string `json:"shared"`
 }
 
 type MetricSpec struct {

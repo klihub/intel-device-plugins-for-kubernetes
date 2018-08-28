@@ -32,6 +32,18 @@ spec:
                     usage:
                       description: Pool usage value in millicores.
                       type: integer
+                    capacity:
+                      description: Pool capacity value in millicores.
+                      type: integer
+                    exclusive:
+                      description: Exclusive CPUset
+                      type: string
+                    shared:
+                      description: Shared CPUset
+                      type: string
                   required:
                   - poolName
                   - usage
+                  - capacity
+                  - exclusive
+                  - shared

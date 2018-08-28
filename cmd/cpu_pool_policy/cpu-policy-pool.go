@@ -18,12 +18,19 @@ package main
 
 import (
 	"flag"
+	"os"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/pool"
+	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
 	stub "k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/stub"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
+
+	poolapi "github.com/intel/intel-device-plugins-for-kubernetes/pkg/client/clientset/versioned"
+	// clientkube "k8s.io/client-go/kubernetes"
+	clientrest "k8s.io/client-go/rest"
+	utilnode "k8s.io/kubernetes/pkg/util/node"
 )
 
 const (
@@ -39,19 +46,24 @@ type poolPolicy struct {
 	poolCfg         pool.NodeConfig
 	pools           *pool.PoolSet
 	configPath      string
+	nodeName        string
+	nameSpace       string
+	cs              *poolapi.Clientset
 }
 
 // Ensure that poolPolicy implements the CpuPolicy interface.
 var _ stub.CpuPolicy = &poolPolicy{}
 
-func NewPoolPolicy(configPath string) stub.CpuPlugin {
-	policy := poolPolicy{}
+func NewPoolPolicy(configPath, nodeName, nameSpace string) stub.CpuPlugin {
+	policy := poolPolicy{
+		configPath: configPath,
+		nodeName:   nodeName,
+		nameSpace:  nameSpace,
+	}
 	plugin, err := stub.NewCpuPlugin(&policy, "intel.com")
 	if err != nil {
 		logPanic("failed to create CPU plugin stub for %s policy: %+v", PolicyName, err)
 	}
-
-	policy.configPath = configPath
 
 	return plugin
 }
@@ -63,6 +75,16 @@ func (p *poolPolicy) Name() string {
 func (p *poolPolicy) Start(s stub.State, topology *topology.CPUTopology, numReservedCPUs int) error {
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
+
+	conf, err := clientrest.InClusterConfig()
+	if err != nil {
+		return err
+	}
+
+	p.cs, err = poolapi.NewForConfig(conf)
+	if err != nil {
+		return err
+	}
 
 	if err := p.restoreState(s); err != nil {
 		return err
@@ -94,7 +116,12 @@ func (p *poolPolicy) Configure(s stub.State) error {
 }
 
 func (p *poolPolicy) restoreState(s stub.State) error {
-	p.pools, _ = pool.NewPoolSet(nil)
+
+	// create new statistics object
+
+	stat := statistics.NewStat(p.nodeName, p.nameSpace, p.cs)
+
+	p.pools, _ = pool.NewPoolSet(nil, stat)
 	p.pools.SetAllocator(TakeByTopology, p.topology)
 
 	if poolState, ok := s.GetPolicyEntry("pools"); ok {
@@ -176,11 +203,16 @@ func (p *poolPolicy) RemoveContainer(s stub.State, containerID string) {
 
 func main() {
 	var configPath string
+	var nameSpace string
 
 	flag.StringVar(&configPath, "config", configDir, "absolute path to CPU pool plugin configuration directory, expecting ConfigMap-style configuration")
+	flag.StringVar(&nameSpace, "namespace", "default", "namespace for Metric objects")
 	flag.Parse()
 
-	plugin := NewPoolPolicy(configPath)
+	// if NODE_NAME is not set then try to use hostname
+	nodeName := utilnode.GetHostname(os.Getenv("NODE_NAME"))
+
+	plugin := NewPoolPolicy(configPath, nodeName, nameSpace)
 
 	if err := plugin.StartCpuPlugin(); err != nil {
 		logPanic("failed to start CPU plugin stub with static policy: %+v", err)
