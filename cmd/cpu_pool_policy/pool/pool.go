@@ -56,8 +56,10 @@ import (
 
 	"github.com/golang/glog"
 
+	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	// "k8s.io/client-go/tools/clientcmd"
 	kubeapi "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
@@ -119,6 +121,7 @@ type PoolSet struct {
 	allocfn    AllocCPUFunc          // CPU allocator function
 	free       cpuset.CPUSet         // free CPUs
 	reconcile  bool                  // whether needs reconcilation
+	stats      *statistics.Stat
 }
 
 // Create default node CPU pool configuration.
@@ -332,12 +335,13 @@ func (p *Pool) String() string {
 }
 
 // Create a new CPU pool set with the given configuration.
-func NewPoolSet(cfg NodeConfig) (*PoolSet, error) {
+func NewPoolSet(cfg NodeConfig, stats *statistics.Stat) (*PoolSet, error) {
 	logInfo("creating new CPU pool set")
 
 	var ps = &PoolSet{
 		pools:      make(map[string]*Pool),
 		containers: make(map[string]*Container),
+		stats:      stats,
 	}
 
 	if err := ps.Reconfigure(cfg); err != nil {
@@ -981,11 +985,9 @@ func (ps *PoolSet) getPoolCapacity(pool string) int64 {
 
 // Update metrics for the given pool.
 func (ps *PoolSet) updatePoolMetrics(pool string) {
-	/* XXX TODO
 	if name, s, e, c, u := ps.getPoolMetrics(pool); name != "" {
 		ps.stats.UpdatePool(name, s, e, c, u)
 	}
-	*/
 }
 
 // Update all pool metrics.

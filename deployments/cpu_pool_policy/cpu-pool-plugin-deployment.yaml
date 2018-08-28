@@ -16,6 +16,11 @@ spec:
     spec:
       containers:
       - name: intel-cpu-pool-plugin
+        env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
         image: intel-cpu-pool-policy:devel
         command: ["/usr/bin/intel_cpu_pool_policy"]
         args: ["-logtostderr"]
