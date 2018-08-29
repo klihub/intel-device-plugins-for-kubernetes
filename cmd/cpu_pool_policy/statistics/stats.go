@@ -73,8 +73,8 @@ func (s *Stat) UpdatePool(name string, shared, exclusive cpuset.CPUSet, capacity
 
 	pool.Exclusive = exclusive.String()
 	pool.Shared = shared.String()
-	pool.Capacity = int(capacity)
-	pool.Usage = int(usage)
+	pool.Capacity = capacity
+	pool.Usage = usage
 
 	if !found {
 		metric.Spec.Pools = append(metric.Spec.Pools, pool)

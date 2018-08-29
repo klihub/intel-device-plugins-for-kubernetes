@@ -4,8 +4,8 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 type Pool struct {
 	PoolName  string `json:"poolName"`
-	Usage     int    `json:"usage"`
-	Capacity  int    `json:"capacity"`
+	Usage     int64  `json:"usage"`
+	Capacity  int64  `json:"capacity"`
 	Exclusive string `json:"exclusive"`
 	Shared    string `json:"shared"`
 }
