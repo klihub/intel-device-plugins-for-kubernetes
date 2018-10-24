@@ -27,7 +27,7 @@ spec:
         imagePullPolicy: IfNotPresent
         volumeMounts:
           - name: config-volume
-            mountPath: /etc/config
+            mountPath: /etc/cpu-pool-plugin-config
           - name: kubeletsockets
             mountPath: /var/lib/kubelet/cpu-plugin
       volumes:
