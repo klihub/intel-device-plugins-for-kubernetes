@@ -47,6 +47,7 @@ func (s *Stat) UpdatePool(name string, shared, exclusive cpuset.CPUSet, capacity
 	if err != nil {
 		metric = &types.Metric{
 			ObjectMeta: metav1.ObjectMeta{Name: s.nodeName},
+			Spec:       types.MetricSpec{Pools: []types.Pool{}},
 		}
 		metric, err = s.cs.CpupoolsV1alpha1().Metrics(s.ns).Create(metric)
 		if err != nil {
