@@ -51,6 +51,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"path"
 	"strconv"
 	"strings"
 
@@ -59,6 +60,7 @@ import (
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
 	// "k8s.io/client-go/tools/clientcmd"
 	kubeapi "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
@@ -149,8 +151,8 @@ func DefaultNodeConfig(numReservedCPUs int, cpuPoolConfig map[string]string) (No
 	return nc, nil
 }
 
-func ParseNodeConfig(numReservedCPUs int, path string) (NodeConfig, error) {
-	files, err := ioutil.ReadDir(path)
+func ParseNodeConfig(numReservedCPUs int, confpath string) (NodeConfig, error) {
+	files, err := ioutil.ReadDir(confpath)
 
 	// maybe no-one loaded a ConfigMap for us?
 	if err != nil || len(files) == 0 {
@@ -160,9 +162,13 @@ func ParseNodeConfig(numReservedCPUs int, path string) (NodeConfig, error) {
 	nc := make(NodeConfig)
 
 	for _, file := range files {
-		data, err := ioutil.ReadFile(file.Name())
+		if file.Name()[0] == '.' {
+			continue
+		}
+		fileName := path.Join(confpath, file.Name())
+		data, err := ioutil.ReadFile(fileName)
 		if err != nil {
-			logWarning("Could not read file %s", file.Name())
+			logWarning("Could not read file %s %s", fileName, err.Error())
 			return NodeConfig{}, err
 		}
 		if err := nc.setPoolConfig(file.Name(), string(data[:])); err != nil {
