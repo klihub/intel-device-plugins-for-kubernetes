@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"path/filepath"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/pool"
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
@@ -30,6 +31,7 @@ import (
 	poolapi "github.com/intel/intel-device-plugins-for-kubernetes/pkg/client/clientset/versioned"
 	// clientkube "k8s.io/client-go/kubernetes"
 	clientrest "k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
 )
 
@@ -73,18 +75,16 @@ func (p *poolPolicy) Name() string {
 }
 
 func (p *poolPolicy) Start(s stub.State, topology *topology.CPUTopology, numReservedCPUs int) error {
+	var err error
+	var clientset *poolapi.Clientset
+
+	if clientset, err = getClientSet(""); err != nil {
+		return err
+	}
+
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
-
-	conf, err := clientrest.InClusterConfig()
-	if err != nil {
-		return err
-	}
-
-	p.cs, err = poolapi.NewForConfig(conf)
-	if err != nil {
-		return err
-	}
+	p.cs = clientset
 
 	if err := p.restoreState(s); err != nil {
 		return err
@@ -201,12 +201,34 @@ func (p *poolPolicy) RemoveContainer(s stub.State, containerID string) {
 	p.updateState(s)
 }
 
+func getClientSet(kubeConfig string) (*poolapi.Clientset, error) {
+	var config *clientrest.Config
+	var err error
+
+	if config, err = clientrest.InClusterConfig(); err != nil {
+		logWarning("no in-cluster configuration, maybe not running as a pod")
+		if kubeConfig == "" {
+			kubeConfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		}
+
+		logWarning("trying to load configuration from %s", kubeConfig)
+		config, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return poolapi.NewForConfig(config)
+}
+
 func main() {
 	var configPath string
 	var nameSpace string
 
 	flag.StringVar(&configPath, "config", configDir, "absolute path to CPU pool plugin configuration directory, expecting ConfigMap-style configuration")
 	flag.StringVar(&nameSpace, "namespace", "default", "namespace for Metric objects")
+
 	flag.Parse()
 
 	// if NODE_NAME is not set then try to use hostname
@@ -215,6 +237,6 @@ func main() {
 	plugin := NewPoolPolicy(configPath, nodeName, nameSpace)
 
 	if err := plugin.StartCpuPlugin(); err != nil {
-		logPanic("failed to start CPU plugin stub with static policy: %+v", err)
+		logPanic("failed to start CPU plugin stub with %s policy: %+v", PolicyName, err)
 	}
 }
