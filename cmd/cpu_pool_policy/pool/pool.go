@@ -475,11 +475,26 @@ func (p *Pool) isUptodate() bool {
 		return false
 	}
 
+	//
+	// TODO:
+	//   Only an oversized *default* pool should be considered up-to-date.
+	//   Others should be considered up-to-date only for an exact match.
+	//
+	//   Since the pool currently does not know its own name, we cannot
+	//   test for defaultness here, hence the overly permissive check.
+	//   In principle this should not break things (too) badly. For each
+	//   oversized non-default pool there should be at least one undersized
+	//   pool (lacking extra CPUs in the oversized one) which will prevent
+	//   the full PoolSet from becoming up-to-date.
+
+	// TODO: should be IsSubsetOf for default, Equals for other pools
 	if p.cfg.Cpus != nil {
-		return p.cfg.Cpus.Equals(p.shared.Union(p.pinned))
+		return p.cfg.Cpus.IsSubsetOf(p.shared.Union(p.pinned))
+
 	}
 
-	if p.cfg.Size == p.shared.Union(p.pinned).Size() {
+	// TODO: should be <= for default, == for all other pools
+	if p.cfg.Size <= p.shared.Union(p.pinned).Size() {
 		return true
 	}
 
