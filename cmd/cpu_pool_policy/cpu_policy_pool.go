@@ -143,6 +143,7 @@ func (p *poolPolicy) RemoveContainer(s stub.State, containerID string) {
 	logInfo("RemoveContainer")
 
 	p.pools.ReleaseCPU(containerID)
+	s.Delete(containerID)
 	p.updateState(s)
 }
 
