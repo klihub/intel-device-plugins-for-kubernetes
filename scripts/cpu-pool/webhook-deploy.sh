@@ -32,10 +32,10 @@ echo "Create secret including signed key/cert pair for the webhook"
 ${srcroot}/scripts/webhook-create-signed-cert.sh --kubectl ${kubectl} --service intel-cpu-pool-webhook-svc --secret intel-cpu-pool-webhook-certs
 
 echo "Create webhook deployment"
-kubectl create -f ${srcroot}/deployments/cpu_pool_admissionwebhook/deployment.yaml
+kubectl create -f ${srcroot}/deployments/cpu_pool/admissionwebhook/deployment.yaml
 
 echo "Create webhook service"
-kubectl create -f ${srcroot}/deployments/cpu_pool_admissionwebhook/service.yaml
+kubectl create -f ${srcroot}/deployments/cpu_pool/admissionwebhook/service.yaml
 
 echo "Register webhook"
-cat ${srcroot}/deployments/cpu_pool_admissionwebhook/mutating-webhook-configuration-tpl.yaml | sed -e "s/{CA_BUNDLE}/${CA_BUNDLE}/g" | ${kubectl} create -f -
+cat ${srcroot}/deployments/cpu_pool/admissionwebhook/mutating-webhook-configuration-tpl.yaml | sed -e "s/{CA_BUNDLE}/${CA_BUNDLE}/g" | ${kubectl} create -f -
