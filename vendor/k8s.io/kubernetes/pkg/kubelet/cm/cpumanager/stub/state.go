@@ -22,6 +22,11 @@ import (
 	api "k8s.io/kubernetes/pkg/kubelet/apis/cpuplugin/v1alpha"
 )
 
+const (
+	// fake CPUSet string used to mark a deleted container
+	DeletedContainer = "deleted"
+)
+
 // ContainerCPUAssignments type used in cpu manger state
 type ContainerCPUAssignments map[string]cpuset.CPUSet
 
@@ -194,7 +199,7 @@ func (s *stubState) ContainerChanges() map[string]*api.ContainerHint {
 		if cset, ok := s.assignments[id]; ok {
 			h.Cpuset = cset.String()
 		} else {
-			h.Cpuset = "deleted"
+			h.Cpuset = DeletedContainer
 		}
 
 		hints[id] = h
