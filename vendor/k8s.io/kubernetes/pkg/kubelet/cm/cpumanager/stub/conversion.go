@@ -106,19 +106,21 @@ func StubPodSpec(in v1.PodSpec) *api.PodSpec {
 
 // Pod
 func CorePod(in *api.Pod) v1.Pod {
-	return v1.Pod{
-//		Name: in.Name,
-//		Namespace: in.Namespace,
-//		Labels: in.Labels,
+	out := v1.Pod{
 		Spec: CorePodSpec(in.Spec),
 	}
+	out.Name = in.Name
+	out.Namespace = in.Namespace
+	out.Labels = in.Labels
+
+	return out
 }
 
 func StubPod(in v1.Pod) *api.Pod {
 	return &api.Pod{
-//		Name: in.Name,
-//		Namespace: in.Namespace,
-//		Labels: in.Labels,
+		Name: in.Name,
+		Namespace: in.Namespace,
+		Labels: in.Labels,
 		Spec: StubPodSpec(in.Spec),
 	}
 }
@@ -217,7 +219,7 @@ func StubState(in stubState) *api.State {
 		if cset, ok := in.assignments[id]; ok {
 			out.Assignments[id] = cset.String()
 		} else {
-			out.Assignments[id] = "deleted"
+			out.Assignments[id] = DeletedContainer
 		}
 	}
 
