@@ -210,6 +210,9 @@ func (p *poolPolicy) updateState(s stub.State) error {
 		s.UpdateResource(name, qty)
 	}
 
+	defaultCPUSet, _ := p.pools.GetPoolCPUSet(pool.DefaultPool)
+	s.SetDefaultCPUSet(defaultCPUSet)
+
 	return nil
 }
 
