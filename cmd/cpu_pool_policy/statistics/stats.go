@@ -56,30 +56,26 @@ func (s *Stat) UpdatePool(name string, shared, exclusive cpuset.CPUSet, capacity
 		}
 	}
 
-	var pool types.Pool
-	var found bool
-
-	// TODO: make this a map
-	for _, pool := range metric.Spec.Pools {
-		if pool.PoolName == name {
-			found = true
-			break
+	updated := []types.Pool{}
+	pool := &types.Pool{
+		PoolName: name,
+		Exclusive: exclusive.String(),
+		Shared: shared.String(),
+		Capacity: capacity,
+		Usage: usage,
+	}
+	for _, p := range metric.Spec.Pools {
+		if p.PoolName != name {
+			updated = append(updated, p)
+		} else {
+			updated = append(updated, *pool);
+			pool = nil
 		}
 	}
-	if !found {
-		pool = types.Pool{
-			PoolName: name,
-		}
+	if pool != nil {
+		updated = append(updated, *pool)
 	}
-
-	pool.Exclusive = exclusive.String()
-	pool.Shared = shared.String()
-	pool.Capacity = capacity
-	pool.Usage = usage
-
-	if !found {
-		metric.Spec.Pools = append(metric.Spec.Pools, pool)
-	}
+	metric.Spec.Pools = updated
 
 	_, err = s.cs.CpupoolsV1alpha1().Metrics(s.ns).Update(metric)
 	if err != nil {
