@@ -799,6 +799,8 @@ func (ps *PoolSet) AllocateCPUs(id string, pool string, numCPUs int) (cpuset.CPU
 		req:  int64(cpus.Size()) * 1000,
 	}
 
+	ps.updatePoolMetrics(pool)
+
 	logInfo("gave %s/CPU#%s to container %s", pool, cpus.String(), id)
 
 	return cpus.Clone(), nil
@@ -822,6 +824,8 @@ func (ps *PoolSet) AllocateCPU(id string, pool string, req int64) (cpuset.CPUSet
 	}
 
 	p.used += req
+
+	ps.updatePoolMetrics(pool)
 
 	logInfo("gave %dm of %s/CPU#%s to container %s", req, pool,
 		p.shared.String(), id)
@@ -1007,7 +1011,9 @@ func (ps *PoolSet) getPoolCapacity(pool string) int64 {
 // Update metrics for the given pool.
 func (ps *PoolSet) updatePoolMetrics(pool string) {
 	if name, s, e, c, u := ps.getPoolMetrics(pool); name != "" {
-		ps.stats.UpdatePool(name, s, e, c, u)
+		if err := ps.stats.UpdatePool(name, s, e, c, u); err != nil {
+			logError("pool metrics update failed: %v", err)
+		}
 	}
 }
 
