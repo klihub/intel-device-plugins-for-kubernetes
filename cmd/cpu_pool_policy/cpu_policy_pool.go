@@ -36,31 +36,35 @@ import (
 )
 
 const (
-	PolicyName = "pool"
-	logPrefix  = "[" + PolicyName + " CPU policy] "
-	configDir  = "/etc/cpu-pool-plugin-config"
+	PolicyName  = "pool"
+	logPrefix   = "[CPU " + PolicyName + " policy] "
+	configDir   = "/etc/cpu-pool-plugin-config"
+	metricSpace = "default"
 )
 
+// plugin executable configuration from the command line/environment variables
+type pluginConfig struct {
+	ConfigDir    string                   // where to look for CPU pool configuration/ConfigMap
+	NodeName     string                   // node name to pick configuration for
+	KubeConfig   string                   // kube configuration if not running as a pod
+	MetricSpace  string                   // namespace for Metric objects
+}
+
+// CPU pool policy
 type poolPolicy struct {
 	topology        *topology.CPUTopology
 	numReservedCPUs int
-	cfg             map[string]string
+	pluginCfg       *pluginConfig
 	poolCfg         pool.NodeConfig
 	pools           *pool.PoolSet
-	configPath      string
-	nodeName        string
-	nameSpace       string
-	cs              *poolapi.Clientset
 }
 
 // Ensure that poolPolicy implements the CpuPolicy interface.
 var _ stub.CpuPolicy = &poolPolicy{}
 
-func NewPoolPolicy(configPath, nodeName, nameSpace string) stub.CpuPlugin {
+func NewPoolPolicy(cfg *pluginConfig) stub.CpuPlugin {
 	policy := poolPolicy{
-		configPath: configPath,
-		nodeName:   nodeName,
-		nameSpace:  nameSpace,
+		pluginCfg: cfg,
 	}
 	plugin, err := stub.NewCpuPlugin(&policy, "intel.com")
 	if err != nil {
@@ -75,28 +79,16 @@ func (p *poolPolicy) Name() string {
 }
 
 func (p *poolPolicy) Start(s stub.State, topology *topology.CPUTopology, numReservedCPUs int) error {
-	var err error
-	var clientset *poolapi.Clientset
-
-	if clientset, err = getClientSet(""); err != nil {
-		return err
-	}
-
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
-	p.cs = clientset
 
-	if err := p.restoreState(s); err != nil {
-		return err
-	}
-
-	return nil
+	return p.restoreState(s)
 }
 
 func (p *poolPolicy) Configure(s stub.State) error {
-	logInfo("* Parsing configuration at %s", p.configPath)
+	logInfo("* Parsing configuration at %s", p.pluginCfg.ConfigDir)
 	// read the configuration data from a ConfigMap associated with the pod
-	cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.configPath)
+	cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -112,53 +104,6 @@ func (p *poolPolicy) Configure(s stub.State) error {
 
 	p.updateState(s)
 
-	return nil
-}
-
-func (p *poolPolicy) restoreState(s stub.State) error {
-
-	// create new statistics object
-
-	stat := statistics.NewStat(p.nodeName, p.nameSpace, p.cs)
-
-	p.pools, _ = pool.NewPoolSet(nil, stat)
-	p.pools.SetAllocator(TakeByTopology, p.topology)
-
-	if poolState, ok := s.GetPolicyEntry("pools"); ok {
-		if err := p.pools.UnmarshalJSON([]byte(poolState)); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (p *poolPolicy) updateState(s stub.State) error {
-	if p.pools == nil {
-		return nil
-	}
-
-	poolState, err := p.pools.MarshalJSON()
-	if err != nil {
-		return err
-	}
-
-	s.SetPolicyEntry("pools", string(poolState))
-
-	assignments := p.pools.GetPoolAssignments(false)
-	for id, cset := range assignments {
-		s.SetCPUSet(id, cset)
-	}
-
-	resources := p.pools.GetPoolCapacity()
-	for name, qty := range resources {
-		s.UpdateResource(name, qty)
-	}
-
-	return nil
-}
-
-func (p *poolPolicy) validateState(s stub.State) error {
 	return nil
 }
 
@@ -208,7 +153,7 @@ func getClientSet(kubeConfig string) (*poolapi.Clientset, error) {
 	if config, err = clientrest.InClusterConfig(); err != nil {
 		logWarning("no in-cluster configuration, maybe not running as a pod")
 		if kubeConfig == "" {
-			kubeConfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+			return nil, err
 		}
 
 		logWarning("trying to load configuration from %s", kubeConfig)
@@ -222,19 +167,75 @@ func getClientSet(kubeConfig string) (*poolapi.Clientset, error) {
 	return poolapi.NewForConfig(config)
 }
 
-func main() {
-	var configPath string
-	var nameSpace string
+func (p *poolPolicy) restoreState(s stub.State) error {
+	// create new statistics object
+	clientset, err := getClientSet(p.pluginCfg.KubeConfig)
+	if err != nil {
+		return err
+	}
+	stat := statistics.NewStat(p.pluginCfg.NodeName, p.pluginCfg.MetricSpace, clientset)
 
-	flag.StringVar(&configPath, "config", configDir, "absolute path to CPU pool plugin configuration directory, expecting ConfigMap-style configuration")
-	flag.StringVar(&nameSpace, "namespace", "default", "namespace for Metric objects")
+	p.pools, _ = pool.NewPoolSet(nil, stat)
+	p.pools.SetAllocator(TakeByTopology, p.topology)
+
+	if poolState, ok := s.GetPolicyEntry("pools"); ok {
+		if err := p.pools.UnmarshalJSON([]byte(poolState)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *poolPolicy) updateState(s stub.State) error {
+	if p.pools == nil {
+		return nil
+	}
+
+	poolState, err := p.pools.MarshalJSON()
+	if err != nil {
+		return err
+	}
+
+	s.SetPolicyEntry("pools", string(poolState))
+
+	assignments := p.pools.GetPoolAssignments(false)
+	for id, cset := range assignments {
+		s.SetCPUSet(id, cset)
+	}
+
+	resources := p.pools.GetPoolCapacity()
+	for name, qty := range resources {
+		s.UpdateResource(name, qty)
+	}
+
+	return nil
+}
+
+func (p *poolPolicy) validateState(s stub.State) error {
+	return nil
+}
+
+func getPluginConfig() *pluginConfig {
+	cfg := pluginConfig{}
+
+	flag.StringVar(&cfg.ConfigDir, "config", configDir,
+		"absolute path to CPU pool plugin configuration directory, expecting ConfigMap-style configuration")
+	flag.StringVar(&cfg.NodeName, "node", utilnode.GetHostname(os.Getenv("NODE_NAME")),
+		"override node name to pick configuration for")
+	flag.StringVar(&cfg.KubeConfig, "kube-config", filepath.Join(os.Getenv("HOME"), ".kube", "config"),
+		"override path to kube configuration when not running as a pod")
+	flag.StringVar(&cfg.MetricSpace, "metric-namespace", metricSpace,
+		"namespace for Metric objects")
 
 	flag.Parse()
 
-	// if NODE_NAME is not set then try to use hostname
-	nodeName := utilnode.GetHostname(os.Getenv("NODE_NAME"))
+	return &cfg
+}
 
-	plugin := NewPoolPolicy(configPath, nodeName, nameSpace)
+func main() {
+	cfg := getPluginConfig()
+	plugin := NewPoolPolicy(cfg)
 
 	if err := plugin.StartCpuPlugin(); err != nil {
 		logPanic("failed to start CPU plugin stub with %s policy: %+v", PolicyName, err)
