@@ -20,10 +20,10 @@
 ### Deploy webhook service
 
 Make sure you have `cfssl` and `jq` utilities installed on your host.
-Then run the script `scripts/cpu-pool-webhook-deploy.sh`.
+Then run the script `scripts/cpu-pool/webhook-deploy.sh`.
 
     $ cd $SRC
-    $ ./scripts/cpu-pool-webhook-deploy.sh
+    $ ./scripts/cpu-pool/webhook-deploy.sh
     Create secret including signed key/cert pair for the webhook
     Creating certs in /tmp/tmp.JYgcFiaoCZ
     certificatesigningrequest "intel-cpu-pool-webhook-svc.default" created
@@ -46,4 +46,4 @@ the actual signing cerificate which is passed in the option
 `--cluster-signing-cert-file` to `kube-controller-manager`. In this case
 you need to point the script to the actual signing cerificate:
 
-    $ ./scripts/webhook-deploy.sh --ca-bundle-path /var/run/kubernetes/server-ca.crt
+    $ ./scripts/cpu-pool/webhook-deploy.sh --ca-bundle-path /var/run/kubernetes/server-ca.crt

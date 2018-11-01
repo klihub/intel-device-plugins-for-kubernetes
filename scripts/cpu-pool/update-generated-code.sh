@@ -22,6 +22,6 @@ set -o pipefail
 # - --output-base because this script should also be able to run inside the vendor dir of
 #   k8s.io/kubernetes. The output-base is needed for the generators to output into the vendor dir
 #   instead of the $GOPATH directly. For normal projects this can be dropped.
-"$(dirname "${BASH_SOURCE}")"/../vendor/k8s.io/code-generator/generate-groups.sh all \
+"$(dirname "${BASH_SOURCE}")"/../../vendor/k8s.io/code-generator/generate-groups.sh all \
   github.com/intel/intel-device-plugins-for-kubernetes/pkg/client \
   github.com/intel/intel-device-plugins-for-kubernetes/pkg/apis cpupools.intel.com:v1alpha1
