@@ -19,35 +19,54 @@ import (
 	"github.com/golang/glog"
 )
 
-//
-// errors and logging
-//
-
-func logFormat(format string, args ...interface{}) string {
-	return fmt.Sprintf(logPrefix+format, args...)
+type logger struct {
+	prefix string
 }
 
-func logVerbose(level glog.Level, format string, args ...interface{}) {
-	glog.V(level).Infof(logFormat(logPrefix+format, args...))
+type Logger interface {
+	Format(format string, args ...interface{}) string
+	Verbose(level glog.Level, format string, args ...interface{})
+	Info(format string, args ...interface{})
+	Warning(format string, args ...interface{})
+	Error(format string, args ...interface{})
+	Fatal(format string, args ...interface{})
+	Panic(format string, args ...interface{})
 }
 
-func logInfo(format string, args ...interface{}) {
-	glog.Info(logFormat(format, args...))
+var _ Logger = &logger{}
+
+func NewLogger(prefix string) Logger {
+	return &logger{ prefix: prefix }
 }
 
-func logWarning(format string, args ...interface{}) {
-	glog.Warningf(logFormat(format, args...))
+func (log *logger) Format(format string, args ...interface{}) string {
+	return fmt.Sprintf(log.prefix + format, args...)
 }
 
-func logError(format string, args ...interface{}) {
-	glog.Errorf(logFormat(format, args...))
+func (log *logger) Verbose(level glog.Level, format string, args ...interface{}) {
+	if !glog.V(level) {
+		glog.InfoDepth(1, log.Format(format, args...))
+	}
 }
 
-func logFatal(format string, args ...interface{}) {
-	glog.Fatalf(logFormat(format, args...))
+func (log *logger) Info(format string, args ...interface{}) {
+	glog.InfoDepth(1, log.Format(format, args...))
 }
 
-func logPanic(format string, args ...interface{}) {
-	logFatal(format, args...)
-	panic(logFormat(format, args...))
+func (log *logger) Warning(format string, args ...interface{}) {
+	glog.WarningDepth(1, log.Format(format, args...))
+}
+
+func (log *logger) Error(format string, args ...interface{}) {
+	glog.ErrorDepth(1, log.Format(format, args...))
+}
+
+func (log *logger) Fatal(format string, args ...interface{}) {
+	glog.FatalDepth(1, log.Format(format, args...))
+}
+
+func (log *logger) Panic(format string, args ...interface{}) {
+	msg := log.Format(format, args...)
+	log.Fatal(msg)
+	panic(msg)
 }

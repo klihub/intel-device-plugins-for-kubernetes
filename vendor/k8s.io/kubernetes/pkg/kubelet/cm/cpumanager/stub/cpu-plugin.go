@@ -35,6 +35,9 @@ const (
 	logPrefix = "[cpu-policy/stub] "
 )
 
+// our logger instance
+var log = NewLogger(logPrefix)
+
 // CpuPolicy interface, implements the actual policy logic.
 type CpuPolicy interface {
 	Name() string
@@ -97,7 +100,7 @@ func (p *cpuPlugin) StartCpuPlugin() error {
 		api.RegisterCpuPluginServer(p.srv, p)
 
 		go func() {
-			logInfo("CPU plugin starting server at: %s\n", p.clientAddr)
+			log.Info("CPU plugin starting server at: %s\n", p.clientAddr)
 			p.srv.Serve(lis)
 		}()
 
@@ -112,11 +115,11 @@ func (p *cpuPlugin) StartCpuPlugin() error {
 			return fmt.Errorf("failed to register with CPUManager: %+v", err)
 		}
 
-		logInfo("CPU policy plugin %s registered", p.policy.Name())
+		log.Info("CPU policy plugin %s registered", p.policy.Name())
 
 		for {
 			if _, err := os.Stat(p.clientAddr); os.IsNotExist(err) {
-				logInfo("CPU policy plugin socket removed, stopping...")
+				log.Info("CPU policy plugin socket removed, stopping...")
 				p.srv.Stop()
 				break
 			}
@@ -170,7 +173,7 @@ func (p *cpuPlugin) registerWithCPUManager() error {
 
 // Relay configuration request.
 func (p *cpuPlugin) Configure(ctx context.Context, req *api.ConfigureRequest) (*api.ConfigureResponse, error) {
-	logInfo("Configure request")
+	log.Info("Configure request")
 
 	topology := CoreCPUTopology(req.Topology)
 	numReservedCPUs := int(req.NumReservedCPUs)
@@ -192,7 +195,7 @@ func (p *cpuPlugin) Configure(ctx context.Context, req *api.ConfigureRequest) (*
 
 // Relay AddContainer request.
 func (p *cpuPlugin) AddContainer(ctx context.Context, req *api.AddContainerRequest) (*api.AddContainerResponse, error) {
-	logInfo("AddContainer request")
+	log.Info("AddContainer request")
 
 	pod := CorePod(req.Pod)
 	container := CoreContainer(req.Container)
@@ -213,7 +216,7 @@ func (p *cpuPlugin) AddContainer(ctx context.Context, req *api.AddContainerReque
 
 // Relay RemoveContainer request.
 func (p *cpuPlugin) RemoveContainer(ctx context.Context, req *api.RemoveContainerRequest) (*api.RemoveContainerResponse, error) {
-	logInfo("RemoveContainer request")
+	log.Info("RemoveContainer request")
 
 	id := req.Id
 
