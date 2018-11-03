@@ -55,8 +55,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/golang/glog"
-
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -65,6 +63,7 @@ import (
 	kubeapi "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/stub"
 )
 
 const (
@@ -126,6 +125,9 @@ type PoolSet struct {
 	stats      *statistics.Stat
 }
 
+// our logger instance
+var log = stub.NewLogger(logPrefix)
+
 // Create default node CPU pool configuration.
 func DefaultNodeConfig(numReservedCPUs int, cpuPoolConfig map[string]string) (NodeConfig, error) {
 	nc := make(NodeConfig)
@@ -168,7 +170,7 @@ func ParseNodeConfig(numReservedCPUs int, confpath string) (NodeConfig, error) {
 		fileName := path.Join(confpath, file.Name())
 		data, err := ioutil.ReadFile(fileName)
 		if err != nil {
-			logWarning("Could not read file %s %s", fileName, err.Error())
+			log.Warning("Could not read file %s %s", fileName, err.Error())
 			return NodeConfig{}, err
 		}
 		if err := nc.setPoolConfig(file.Name(), string(data[:])); err != nil {
@@ -342,7 +344,7 @@ func (p *Pool) String() string {
 
 // Create a new CPU pool set with the given configuration.
 func NewPoolSet(cfg NodeConfig, stats *statistics.Stat) (*PoolSet, error) {
-	logInfo("creating new CPU pool set")
+	log.Info("creating new CPU pool set")
 
 	var ps = &PoolSet{
 		pools:      make(map[string]*Pool),
@@ -438,7 +440,7 @@ func (ps *PoolSet) Reconfigure(cfg NodeConfig) error {
 			p.cfg = c
 		}
 
-		logInfo("pool %s configured to %s", pool, c.String())
+		log.Info("pool %s configured to %s", pool, c.String())
 	}
 
 	// mark removed pools for removal
@@ -545,11 +547,11 @@ func (ps *PoolSet) trimPool(pool string) bool {
 
 	p, _ := ps.pools[pool]
 	if _, err := ps.freeCPUs(&p.shared, &ps.free, free); err != nil {
-		logWarning("failed to shrink pool %s by %d CPUs", pool, free)
+		log.Warning("failed to shrink pool %s by %d CPUs", pool, free)
 		return false
 	}
 
-	logInfo("pool %s: trimmed by %d CPUs", pool, free)
+	log.Info("pool %s: trimmed by %d CPUs", pool, free)
 
 	return true
 }
@@ -568,11 +570,11 @@ func (ps *PoolSet) allocateReservedPool() {
 		ps.takeCPUs(&ps.free, &r.shared, more)
 	}
 
-	logInfo("pool %s: allocated CPU#%s (%d)", ReservedPool,
+	log.Info("pool %s: allocated CPU#%s (%d)", ReservedPool,
 		r.shared.String(), r.shared.Size())
 
 	if r.shared.Size() < r.cfg.Size {
-		logError("pool %s: insufficient cpus %s (need %d)", ReservedPool,
+		log.Error("pool %s: insufficient cpus %s (need %d)", ReservedPool,
 			r.shared.String(), r.cfg.Size)
 	}
 }
@@ -592,7 +594,7 @@ func (ps *PoolSet) allocateByCPUId() {
 			p.shared = p.shared.Union(cpus)
 			ps.free = ps.free.Difference(cpus)
 
-			logInfo("pool %s: allocated requested CPU#%s (%d)", pool,
+			log.Info("pool %s: allocated requested CPU#%s (%d)", pool,
 				cpus.String(), cpus.Size())
 		}
 	}
@@ -612,7 +614,7 @@ func (ps *PoolSet) allocateByCPUCount() {
 		cnt := p.cfg.Size - (p.shared.Size() + p.pinned.Size())
 		cpus, _ := ps.takeCPUs(&ps.free, &p.shared, cnt)
 
-		logInfo("pool %s: allocated available CPU#%s (%d)", pool,
+		log.Info("pool %s: allocated available CPU#%s (%d)", pool,
 			cpus.String(), cpus.Size())
 	}
 }
@@ -624,7 +626,7 @@ func (ps *PoolSet) claimLeftoverCPUs(pool string) {
 		return
 	}
 	p.shared = p.shared.Union(ps.free)
-	logInfo("pool %s: claimed leftover CPU#%s (%d)", pool,
+	log.Info("pool %s: claimed leftover CPU#%s (%d)", pool,
 		ps.free.String(), ps.free.Size())
 	ps.free = cpuset.NewCPUSet()
 }
@@ -641,11 +643,11 @@ func (ps *PoolSet) getFreeCPUs() {
 func (ps *PoolSet) ReconcileConfig() error {
 	// check if everything is up-to-date
 	if ps.reconcile = !ps.isUptodate(); !ps.reconcile {
-		logInfo("pools already up-to-date, nothing to reconcile")
+		log.Info("pools already up-to-date, nothing to reconcile")
 		return nil
 	}
 
-	logInfo("CPU pools not up-to-date, reconciling...")
+	log.Info("CPU pools not up-to-date, reconciling...")
 
 	//
 	// Our pool reconcilation algorithm is:
@@ -684,13 +686,13 @@ func (ps *PoolSet) ReconcileConfig() error {
 			ps.reconcile = true
 		}
 
-		logInfo("pool %s: %s", pool, p.String())
+		log.Info("pool %s: %s", pool, p.String())
 	}
 
 	if !ps.reconcile {
-		logInfo("CPU pools are now up-to-date")
+		log.Info("CPU pools are now up-to-date")
 	} else {
-		logInfo("CPU pools need further reconcilation...")
+		log.Info("CPU pools need further reconcilation...")
 	}
 
 	return nil
@@ -801,7 +803,7 @@ func (ps *PoolSet) AllocateCPUs(id string, pool string, numCPUs int) (cpuset.CPU
 
 	ps.updatePoolMetrics(pool)
 
-	logInfo("gave %s/CPU#%s to container %s", pool, cpus.String(), id)
+	log.Info("gave %s/CPU#%s to container %s", pool, cpus.String(), id)
 
 	return cpus.Clone(), nil
 }
@@ -827,7 +829,7 @@ func (ps *PoolSet) AllocateCPU(id string, pool string, req int64) (cpuset.CPUSet
 
 	ps.updatePoolMetrics(pool)
 
-	logInfo("gave %dm of %s/CPU#%s to container %s", req, pool,
+	log.Info("gave %dm of %s/CPU#%s to container %s", req, pool,
 		p.shared.String(), id)
 
 	return p.shared.Clone(), nil
@@ -837,7 +839,7 @@ func (ps *PoolSet) AllocateCPU(id string, pool string, req int64) (cpuset.CPUSet
 func (ps *PoolSet) ReleaseCPU(id string) {
 	c, ok := ps.containers[id]
 	if !ok {
-		logWarning("couldn't find allocations for container %s", id)
+		log.Warning("couldn't find allocations for container %s", id)
 		return
 	}
 
@@ -845,18 +847,18 @@ func (ps *PoolSet) ReleaseCPU(id string) {
 
 	p, ok := ps.pools[c.pool]
 	if !ok {
-		logWarning("couldn't find pool %s for container %s", c.pool, id)
+		log.Warning("couldn't find pool %s for container %s", c.pool, id)
 		return
 	}
 
 	if c.cpus.IsEmpty() {
 		p.used -= c.req
-		logInfo("cpumanager] released %dm of %s/CPU:%s for container %s", c.req, c.pool, p.shared.String(), c.id)
+		log.Info("cpumanager] released %dm of %s/CPU:%s for container %s", c.req, c.pool, p.shared.String(), c.id)
 	} else {
 		p.shared = p.shared.Union(c.cpus)
 		p.pinned = p.pinned.Difference(c.cpus)
 
-		logInfo("released %s/CPU:%s for container %s", c.pool, p.shared.String(), c.id)
+		log.Info("released %s/CPU:%s for container %s", c.pool, p.shared.String(), c.id)
 	}
 
 	ps.updatePoolMetrics(c.pool)
@@ -1012,7 +1014,7 @@ func (ps *PoolSet) getPoolCapacity(pool string) int64 {
 func (ps *PoolSet) updatePoolMetrics(pool string) {
 	if name, s, e, c, u := ps.getPoolMetrics(pool); name != "" {
 		if err := ps.stats.UpdatePool(name, s, e, c, u); err != nil {
-			logError("pool metrics update failed: %v", err)
+			log.Error("pool metrics update failed: %v", err)
 		}
 	}
 }
@@ -1022,34 +1024,6 @@ func (ps *PoolSet) updateMetrics() {
 	for pool := range ps.pools {
 		ps.updatePoolMetrics(pool)
 	}
-}
-
-//
-// errors and logging
-//
-
-func logFormat(format string, args ...interface{}) string {
-	return fmt.Sprintf(logPrefix+format, args...)
-}
-
-func logVerbose(level glog.Level, format string, args ...interface{}) {
-	glog.V(level).Infof(logFormat(logPrefix+format, args...))
-}
-
-func logInfo(format string, args ...interface{}) {
-	glog.Info(logFormat(format, args...))
-}
-
-func logWarning(format string, args ...interface{}) {
-	glog.Warningf(logFormat(format, args...))
-}
-
-func logError(format string, args ...interface{}) {
-	glog.Errorf(logFormat(format, args...))
-}
-
-func logFatal(format string, args ...interface{}) {
-	glog.Fatalf(logFormat(format, args...))
 }
 
 //
