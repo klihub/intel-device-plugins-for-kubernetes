@@ -62,13 +62,16 @@ type poolPolicy struct {
 // Ensure that poolPolicy implements the CpuPolicy interface.
 var _ stub.CpuPolicy = &poolPolicy{}
 
+// our logger instance
+var log = stub.NewLogger(logPrefix)
+
 func NewPoolPolicy(cfg *pluginConfig) stub.CpuPlugin {
 	policy := poolPolicy{
 		pluginCfg: cfg,
 	}
 	plugin, err := stub.NewCpuPlugin(&policy, "intel.com")
 	if err != nil {
-		logPanic("failed to create CPU plugin stub for %s policy: %+v", PolicyName, err)
+		log.Panic("failed to create CPU plugin stub for %s policy: %+v", PolicyName, err)
 	}
 
 	return plugin
@@ -86,19 +89,19 @@ func (p *poolPolicy) Start(s stub.State, topology *topology.CPUTopology, numRese
 }
 
 func (p *poolPolicy) Configure(s stub.State) error {
-	logInfo("* Parsing configuration at %s", p.pluginCfg.ConfigDir)
+	log.Info("* Parsing configuration at %s", p.pluginCfg.ConfigDir)
 	// read the configuration data from a ConfigMap associated with the pod
 	cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir)
 	if err != nil {
 		return err
 	}
 
-	logInfo("Configuration: %s", cfg.String())
+	log.Info("Configuration: %s", cfg.String())
 
 	p.poolCfg = cfg
 
 	if err := p.pools.Reconfigure(p.poolCfg); err != nil {
-		logError("failed to reconfigure pools: %s", err.Error())
+		log.Error("failed to reconfigure pools: %s", err.Error())
 		return err
 	}
 
@@ -111,16 +114,16 @@ func (p *poolPolicy) AddContainer(s stub.State, pod *v1.Pod, container *v1.Conta
 	var err error
 	var cset cpuset.CPUSet
 
-	logInfo("AddContainer")
+	log.Info("AddContainer")
 
 	if _, ok := p.pools.GetContainerCPUSet(containerID); ok {
-		logInfo("container already present in state, skipping (container id: %s)", containerID)
+		log.Info("container already present in state, skipping (container id: %s)", containerID)
 		return nil
 	}
 
 	pool, req, lim := pool.GetContainerPoolResources(pod, container)
 
-	logInfo("container %s asks for %d/%d from pool %s", containerID, req, lim, pool)
+	log.Info("container %s asks for %d/%d from pool %s", containerID, req, lim, pool)
 
 	if req != 0 && req == lim && req%1000 == 0 {
 		cset, err = p.pools.AllocateCPUs(containerID, pool, int(req/1000))
@@ -129,18 +132,18 @@ func (p *poolPolicy) AddContainer(s stub.State, pod *v1.Pod, container *v1.Conta
 	}
 
 	if err != nil {
-		logError("unable to allocate CPUs (container id: %s, error: %v)", containerID, err)
+		log.Error("unable to allocate CPUs (container id: %s, error: %v)", containerID, err)
 		return err
 	}
 
-	logInfo("allocated CPUSet: %s", cset.String())
+	log.Info("allocated CPUSet: %s", cset.String())
 	p.updateState(s)
 
 	return nil
 }
 
 func (p *poolPolicy) RemoveContainer(s stub.State, containerID string) {
-	logInfo("RemoveContainer")
+	log.Info("RemoveContainer")
 
 	p.pools.ReleaseCPU(containerID)
 	s.Delete(containerID)
@@ -152,12 +155,12 @@ func getClientSet(kubeConfig string) (*poolapi.Clientset, error) {
 	var err error
 
 	if config, err = clientrest.InClusterConfig(); err != nil {
-		logWarning("no in-cluster configuration, maybe not running as a pod")
+		log.Warning("no in-cluster configuration, maybe not running as a pod")
 		if kubeConfig == "" {
 			return nil, err
 		}
 
-		logWarning("trying to load configuration from %s", kubeConfig)
+		log.Warning("trying to load configuration from %s", kubeConfig)
 		config, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
 	}
 
@@ -242,6 +245,6 @@ func main() {
 	plugin := NewPoolPolicy(cfg)
 
 	if err := plugin.StartCpuPlugin(); err != nil {
-		logPanic("failed to start CPU plugin stub with %s policy: %+v", PolicyName, err)
+		log.Panic("failed to start CPU plugin stub with %s policy: %+v", PolicyName, err)
 	}
 }
