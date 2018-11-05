@@ -24,8 +24,8 @@ message Empty {
 //   These types correspond to K8s types that we expose (relay) to CPU
 //   Manager policy plugins. They are typically either metadata that can
 //   be relevant for decision-making in the plugin, or they are data
-//   types specific to the CPU Manager. These types typically have only
-//   a subset of the data present in the corresponding K8s types.
+//   types specific to the CPU Manager. The relayed types typically only
+//   have a subset of the data present in the corresponding K8s types.
 //
 
 //
@@ -50,7 +50,6 @@ message ResourceRequirements {
 message PodSpec {
         string SchedulerName = 1;
         string PriorityClassName = 2;
-        // Should we have Affinity and Tolerations ?
 }
 
 // Pod data
@@ -59,7 +58,7 @@ message Pod {
         string Namespace = 2;
         map<string, string> Labels = 3;
         PodSpec Spec = 4;
-        // Should we have Annotations as well ?
+        // TODO: we probably should have Annotations as well...
 }
 
 // Container data
@@ -110,9 +109,9 @@ message ContainerHint {
         string memory = 3;
         // Container cache confguration.
         string cache = 4;
-        // Environment variables to set in the container.
+        // AddContainer: environment variables to set in the container.
         map<string, string> environment = 5;
-        // *Extra* annotations to put on the container.
+        // AddContainer: *extra* annotations to put on the container.
         map<string, string> annotations = 6;
 }
 
@@ -148,6 +147,14 @@ service CpuPlugin {
         rpc AddContainer(AddContainerRequest) returns (AddContainerResponse) {}
         // Release resources of the given container.
         rpc RemoveContainer(RemoveContainerRequest) returns (RemoveContainerResponse) {}
+        // GetContainerUpdates listens to a stream of container updates. Unlike responses
+        // these are unsolicited container reconfiguration events which are not in direct
+        // response to an AddContainer or RemoveContainer request. They are typically
+        // triggered by events outside of the realm of the K8s CPUManager, for instance by
+        // and external (to K8s) entity reconfiguring the currently active policy without
+        // restarting kubelet. It is perfectly fine for a policy implementation to never
+        // generate such events.
+        rpc GetContainerUpdates(Empty) returns (stream UpdateContainerEvent) {}
 }
 
 // Data for configuring/starting the plugin.
@@ -203,6 +210,16 @@ message RemoveContainerRequest {
 //
 message RemoveContainerResponse {
         // Updated (other) container configuration, if any.
+        map<string, ContainerHint> hints = 1;
+        // Updated resource declarations, if any.
+        map<string, Quantity> resources = 2;
+        // State updates, if any.
+        State state = 3;
+}
+
+// Unsolicited container update event.
+message UpdateContainerEvent {
+        // Container configuration hints.
         map<string, ContainerHint> hints = 1;
         // Updated resource declarations, if any.
         map<string, Quantity> resources = 2;

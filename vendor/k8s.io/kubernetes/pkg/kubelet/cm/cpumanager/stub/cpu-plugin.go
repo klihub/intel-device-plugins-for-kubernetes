@@ -32,7 +32,10 @@ import (
 )
 
 const (
+	// our log prefix
 	logPrefix = "[cpu-policy/stub] "
+	// our registration server startup timeout
+	serverTimeout = 10 * time.Second
 )
 
 // our logger instance
@@ -105,7 +108,7 @@ func (p *cpuPlugin) StartCpuPlugin() error {
 		}()
 
 		// Wait for our server to start up.
-		if err = waitForServer(p.clientAddr, 10*time.Second); err != nil {
+		if err = waitForServer(p.clientAddr, serverTimeout); err != nil {
 			return fmt.Errorf("failed to wait for our gRPC server: %+v", err)
 		}
 
@@ -228,4 +231,28 @@ func (p *cpuPlugin) RemoveContainer(ctx context.Context, req *api.RemoveContaine
 		Resources: p.state.ResourceChanges(false),
 		State:     p.state.StateChanges(),
 	}, nil
+}
+
+
+// Start up the container update event loop.
+func (p *cpuPlugin) GetContainerUpdates(empty *api.Empty, srv api.CpuPlugin_GetContainerUpdatesServer) error {
+	log.Info("Starting container update event forwarding loop")
+
+	//
+	// Notes:
+	//   Curently we just sit tight and dummy here. The policy relay plugin merely uses this
+	//   streaming interface to detect if/when the plugin goes down. It does not do anything
+	//   with any actual events sent.
+	//
+	// TODO:
+	//   Create a channel during plugin creation for passing here update events which are to
+	//   be forwarded to the plugin relay on the kubelet side. Add a SendUpdateEvent function
+	//   which can be used to push actual events through that channel here and to the relay.
+	//
+
+	for {
+		time.Sleep(30 * time.Second)
+	}
+
+	return nil
 }
