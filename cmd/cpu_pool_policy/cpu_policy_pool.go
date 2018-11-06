@@ -81,24 +81,27 @@ func (p *poolPolicy) Name() string {
 	return string(PolicyName)
 }
 
-func (p *poolPolicy) Start(s stub.State, topology *topology.CPUTopology, numReservedCPUs int) error {
+func (p *poolPolicy) NewPolicy(topology *topology.CPUTopology, numReservedCPUs int) error {
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
 
-	return p.restoreState(s)
+	return nil
 }
 
-func (p *poolPolicy) Configure(s stub.State) error {
-	log.Info("* Parsing configuration at %s", p.pluginCfg.ConfigDir)
-	// read the configuration data from a ConfigMap associated with the pod
-	cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir)
-	if err != nil {
+func (p *poolPolicy) Start(s stub.State) error {
+	log.Info("restoring from last stored checkpoint")
+	if err := p.restoreState(s); err != nil {
 		return err
 	}
 
-	log.Info("Configuration: %s", cfg.String())
+	log.Info("* Parsing configuration at %s", p.pluginCfg.ConfigDir)
+	if cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir); err != nil {
+		return err
+	} else {
+		p.poolCfg = cfg
+	}
 
-	p.poolCfg = cfg
+	log.Info("Configuration: %s", p.poolCfg.String())
 
 	if err := p.pools.Reconfigure(p.poolCfg); err != nil {
 		log.Error("failed to reconfigure pools: %s", err.Error())
@@ -108,6 +111,7 @@ func (p *poolPolicy) Configure(s stub.State) error {
 	p.updateState(s)
 
 	return nil
+
 }
 
 func (p *poolPolicy) AddContainer(s stub.State, pod *v1.Pod, container *v1.Container, containerID string) error {
@@ -188,6 +192,15 @@ func (p *poolPolicy) restoreState(s stub.State) error {
 		}
 	}
 
+	assignments := p.pools.GetPoolAssignments(false)
+	for id, _ := range assignments {
+		log.Info("checking container %s", id)
+		if _, found := s.GetCPUSet(id); !found {
+			log.Info("releaseing CPU for lingering container %s", id)
+			p.pools.ReleaseCPU(id)
+		}
+	}
+
 	return nil
 }
 
@@ -244,7 +257,7 @@ func main() {
 	cfg := getPluginConfig()
 	plugin := NewPoolPolicy(cfg)
 
-	if err := plugin.StartCpuPlugin(); err != nil {
-		log.Panic("failed to start CPU plugin stub with %s policy: %+v", PolicyName, err)
+	if err := plugin.SetupAndServe(); err != nil {
+		log.Panic("failed to set up/start CPU plugin stub with '%s' policy: %+v", PolicyName, err)
 	}
 }
