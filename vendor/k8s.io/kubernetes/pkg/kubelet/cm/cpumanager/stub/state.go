@@ -75,7 +75,7 @@ type stubState struct {
 	pluginState       map[string]string        // updated plugin-specific state
 }
 
-func newStubState(in *api.State, vendor string) stubState {
+func newStubState(in *api.State) stubState {
 	s := CoreState(in)
 	s.resources = v1.ResourceList{}
 	if in.PluginState != nil {
