@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/pool"
-	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
+	metrics "github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
 	stub "k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/stub"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
@@ -36,157 +36,146 @@ import (
 )
 
 const (
-	PolicyName  = "pool"
-	logPrefix   = "[CPU " + PolicyName + " policy] "
-	configDir   = "/etc/cpu-pool-plugin-config"
+	// PolicyPool is the name of the pool policy
+	PolicyPool = "pool"
+	// PolicyVendor is the vendor and resource namespace for the pool policy
+	PolicyVendor = "intel.com"
+	// log message prefix
+	logPrefix = "[CPU " + PolicyPool + " policy] "
+	// default configuration/ConfigMap directory
+	configDir = "/etc/cpu-pool-plugin-config"
+	// default namespace for metrics objects
 	metricSpace = "default"
+	// key for pool policy state in CPUManager checkpointed state
+	poolStateKey = "pools"
 )
 
-// plugin executable configuration from the command line/environment variables
+// our logger instance
+var log = stub.NewLogger(logPrefix)
+
+// pluginConfig encapsulates configuration supplied to the plugin executable
+// It is gathered from the command line and environment variables.
 type pluginConfig struct {
-	ConfigDir    string                   // where to look for CPU pool configuration/ConfigMap
-	NodeName     string                   // node name to pick configuration for
-	KubeConfig   string                   // kube configuration if not running as a pod
-	MetricSpace  string                   // namespace for Metric objects
+	ConfigDir   string        // where to look for configuration/ConfigMap
+	NodeName    string        // node name to pick our configuration for
+	KubeConfig  string        // .kube directory if not running as a pod
+	MetricSpace string        // namespace for metrics objects
 }
 
-// CPU pool policy
+// poolPolicy implements the 'pool' CPU Manager policy.
 type poolPolicy struct {
-	topology        *topology.CPUTopology
-	numReservedCPUs int
-	pluginCfg       *pluginConfig
-	poolCfg         pool.NodeConfig
-	pools           *pool.PoolSet
+	topology        *topology.CPUTopology  // CPU topology information
+	numReservedCPUs int                    // kube+system-reserved CPUs
+	pluginCfg       *pluginConfig          // plugin configuration data
+	poolCfg         pool.NodeConfig        // CPU pool configuration
+	pools           *pool.PoolSet          // CPU pools
 }
 
 // Ensure that poolPolicy implements the CpuPolicy interface.
 var _ stub.CpuPolicy = &poolPolicy{}
 
-// our logger instance
-var log = stub.NewLogger(logPrefix)
-
+// NewPoolPolicy creates a CPU plugin stub, initialized with the pool policy.
 func NewPoolPolicy(cfg *pluginConfig) stub.CpuPlugin {
-	policy := poolPolicy{
-		pluginCfg: cfg,
-	}
-	plugin, err := stub.NewCpuPlugin(&policy, "intel.com")
-	if err != nil {
-		log.Panic("failed to create CPU plugin stub for %s policy: %+v", PolicyName, err)
-	}
+	log.Info("creating '%s' policy plugin", PolicyPool)
 
-	return plugin
+	if plugin, err := stub.NewCpuPlugin(&poolPolicy{pluginCfg:cfg},	PolicyVendor); err != nil {
+		log.Error("failed to create CPU policy stub with '%s' policy: %v", PolicyPool, err)
+		return nil
+	} else {
+		return plugin
+	}
 }
 
+// Name returns the well-known policy name for the pool policy.
 func (p *poolPolicy) Name() string {
-	return string(PolicyName)
+	return string(PolicyPool)
 }
 
+// NewPolicy is the 'constructor', called when the policy gets registered with the CPUManager.
 func (p *poolPolicy) NewPolicy(topology *topology.CPUTopology, numReservedCPUs int) error {
+	log.Info("CPU topology set to %+v, %d CPUs to be reserved", topology, numReservedCPUs)
+
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
 
 	return nil
 }
 
+// Start prepares the pool policy for accepting CPUManager container requests.
 func (p *poolPolicy) Start(s stub.State) error {
-	log.Info("restoring from last stored checkpoint")
+	log.Info("starting '%s' policy plugin", PolicyPool)
+
+	if err := p.validateState(s); err != nil {
+		return err
+	}
+
+	if err := p.createPools(); err != nil {
+		return err
+	}
+
 	if err := p.restoreState(s); err != nil {
 		return err
 	}
 
-	log.Info("* Parsing configuration at %s", p.pluginCfg.ConfigDir)
-	if cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir); err != nil {
-		return err
-	} else {
-		p.poolCfg = cfg
-	}
-
-	log.Info("Configuration: %s", p.poolCfg.String())
-
-	if err := p.pools.Reconfigure(p.poolCfg); err != nil {
-		log.Error("failed to reconfigure pools: %s", err.Error())
+	if err := p.configure(); err != nil {
 		return err
 	}
 
-	p.updateState(s)
+	if err := p.updateState(s); err != nil {
+		return err
+	}
 
 	return nil
-
 }
 
+// Allocate resources for the given container.
 func (p *poolPolicy) AddContainer(s stub.State, pod *v1.Pod, container *v1.Container, containerID string) error {
-	var err error
 	var cset cpuset.CPUSet
-
-	log.Info("AddContainer")
+	var err error
 
 	if _, ok := p.pools.GetContainerCPUSet(containerID); ok {
-		log.Info("container already present in state, skipping (container id: %s)", containerID)
+		log.Info("container %s already has allocations, nothing to do", containerID)
 		return nil
 	}
 
 	pool, req, lim := pool.GetContainerPoolResources(pod, container)
 
-	log.Info("container %s asks for %d/%d from pool %s", containerID, req, lim, pool)
-
-	if req != 0 && req == lim && req%1000 == 0 {
-		cset, err = p.pools.AllocateCPUs(containerID, pool, int(req/1000))
+	if req != 0 {
+		if req == lim && req % 1000 == 0 {
+			cset, err = p.pools.AllocateCPUs(containerID, pool, int(req / 1000))
+		} else {
+			cset, err = p.pools.AllocateCPU(containerID, pool, req)
+		}
 	} else {
 		cset, err = p.pools.AllocateCPU(containerID, pool, req)
 	}
 
 	if err != nil {
-		log.Error("unable to allocate CPUs (container id: %s, error: %v)", containerID, err)
+		log.Error("pool %s: failed to add container %s (request %d - %d): %v",
+			pool, containerID, req, lim, err)
 		return err
 	}
 
-	log.Info("allocated CPUSet: %s", cset.String())
+	log.Info("pool %s: added %s (request %d - %d) => CPUs %s", pool, containerID, req, lim, cset.String())
+
 	p.updateState(s)
 
 	return nil
 }
 
+// Release resources of the given container.
 func (p *poolPolicy) RemoveContainer(s stub.State, containerID string) {
-	log.Info("RemoveContainer")
-
 	p.pools.ReleaseCPU(containerID)
 	s.Delete(containerID)
+
 	p.updateState(s)
 }
 
-func getClientSet(kubeConfig string) (*poolapi.Clientset, error) {
-	var config *clientrest.Config
-	var err error
-
-	if config, err = clientrest.InClusterConfig(); err != nil {
-		log.Warning("no in-cluster configuration, maybe not running as a pod")
-		if kubeConfig == "" {
-			return nil, err
-		}
-
-		log.Warning("trying to load configuration from %s", kubeConfig)
-		config, err = clientcmd.BuildConfigFromFlags("", kubeConfig)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return poolapi.NewForConfig(config)
-}
-
+// Restore pool state from the last checkpointed state.
 func (p *poolPolicy) restoreState(s stub.State) error {
-	// create new statistics object
-	clientset, err := getClientSet(p.pluginCfg.KubeConfig)
-	if err != nil {
-		return err
-	}
-	stat := statistics.NewStat(p.pluginCfg.NodeName, p.pluginCfg.MetricSpace, clientset)
+	log.Info("restoring last checkpointed '%s' policy state", PolicyPool)
 
-	p.pools, _ = pool.NewPoolSet(nil, stat)
-	p.pools.SetAllocator(TakeByTopology, p.topology)
-
-	if poolState, ok := s.GetPolicyEntry("pools"); ok {
+	if poolState, ok := s.GetPolicyEntry(poolStateKey); ok {
 		if err := p.pools.UnmarshalJSON([]byte(poolState)); err != nil {
 			return err
 		}
@@ -196,7 +185,7 @@ func (p *poolPolicy) restoreState(s stub.State) error {
 	for id, _ := range assignments {
 		log.Info("checking container %s", id)
 		if _, found := s.GetCPUSet(id); !found {
-			log.Info("releaseing CPU for lingering container %s", id)
+			log.Info("releasing CPU for lingering container %s", id)
 			p.pools.ReleaseCPU(id)
 		}
 	}
@@ -204,38 +193,111 @@ func (p *poolPolicy) restoreState(s stub.State) error {
 	return nil
 }
 
+// Validate the state supplied to the pool policy.
+func (p *poolPolicy) validateState(s stub.State) error {
+	// TODO: add basic sanity checks.
+	return nil
+}
+
+// Update the pool/policy state to reflect the latest changes in allocations.
 func (p *poolPolicy) updateState(s stub.State) error {
 	if p.pools == nil {
 		return nil
 	}
 
+	// update private, policy-specific state
 	poolState, err := p.pools.MarshalJSON()
 	if err != nil {
 		return err
 	}
+	s.SetPolicyEntry(poolStateKey, string(poolState))
 
-	s.SetPolicyEntry("pools", string(poolState))
-
+	// update container CPU assignments
 	assignments := p.pools.GetPoolAssignments(false)
 	for id, cset := range assignments {
 		s.SetCPUSet(id, cset)
 	}
 
+	// update resource capacity declarations
 	resources := p.pools.GetPoolCapacity()
 	for name, qty := range resources {
 		s.UpdateResource(name, qty)
 	}
 
+	// update default CPUSet
 	defaultCPUSet, _ := p.pools.GetPoolCPUSet(pool.DefaultPool)
 	s.SetDefaultCPUSet(defaultCPUSet)
 
 	return nil
 }
 
-func (p *poolPolicy) validateState(s stub.State) error {
+// Reconfigure the pools using the currently active configuration.
+func (p *poolPolicy) configure() error {
+	log.Info("configuring CPU pools from %s", p.pluginCfg.ConfigDir)
+
+	if cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir); err != nil {
+		return err
+	} else {
+		p.poolCfg = cfg
+	}
+
+	log.Info("CPU pool configuration: %s", p.poolCfg.String())
+
+	if err := p.pools.Reconfigure(p.poolCfg); err != nil {
+		return err
+	}
+
 	return nil
 }
 
+// Create and initialize a(n empty) pool set.
+func (p *poolPolicy) createPools() error {
+	log.Info("initializing CPU pools")
+
+	metrics, err := p.createMetricsApi()
+	if err != nil {
+		return err
+	}
+
+	p.pools, err = pool.NewPoolSet(nil, metrics)
+	if err != nil {
+		return err
+	}
+	p.pools.SetAllocator(TakeByTopology, p.topology)
+
+	return nil
+}
+
+// Create the pool metrics API interface.
+func (p *poolPolicy) createMetricsApi() (*metrics.Stat, error) {
+	var config *clientrest.Config
+	var client *poolapi.Clientset
+	var err error
+
+	log.Info("initializing pool metrics interface")
+
+	if config, err = clientrest.InClusterConfig(); err != nil {
+		log.Warning("no in-cluster configuration, maybe not running as a pod")
+
+		if p.pluginCfg.KubeConfig == "" {
+			return nil, err
+		}
+
+		log.Warning("retrying with configuration from %s", p.pluginCfg.KubeConfig)
+
+		if config, err = clientcmd.BuildConfigFromFlags("", p.pluginCfg.KubeConfig); err != nil {
+			return nil, err
+		}
+	}
+
+	if client, err = poolapi.NewForConfig(config); err != nil {
+		return nil, err
+	}
+
+	return metrics.NewStat(p.pluginCfg.NodeName, p.pluginCfg.MetricSpace, client), nil
+}
+
+// Parse the command line for configuration options.
 func getPluginConfig() *pluginConfig {
 	cfg := pluginConfig{}
 
@@ -253,11 +315,12 @@ func getPluginConfig() *pluginConfig {
 	return &cfg
 }
 
+// Start up the pool CPU policy.
 func main() {
 	cfg := getPluginConfig()
 	plugin := NewPoolPolicy(cfg)
 
 	if err := plugin.SetupAndServe(); err != nil {
-		log.Panic("failed to set up/start CPU plugin stub with '%s' policy: %+v", PolicyName, err)
+		log.Panic("failed to start pool CPU policy plugin: %v", err)
 	}
 }
