@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"sync"
 	"path/filepath"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/pool"
@@ -64,9 +65,11 @@ type pluginConfig struct {
 
 // poolPolicy implements the 'pool' CPU Manager policy.
 type poolPolicy struct {
+	sync.Mutex
 	topology        *topology.CPUTopology  // CPU topology information
 	numReservedCPUs int                    // kube+system-reserved CPUs
 	pluginCfg       *pluginConfig          // plugin configuration data
+	cfgPicker       ConfigPicker           // node configuration picker
 	poolCfg         pool.NodeConfig        // CPU pool configuration
 	pools           *pool.PoolSet          // CPU pools
 }
@@ -74,11 +77,26 @@ type poolPolicy struct {
 // Ensure that poolPolicy implements the CpuPolicy interface.
 var _ stub.CpuPolicy = &poolPolicy{}
 
+func initPoolPolicy(cfg *pluginConfig) (*poolPolicy, error) {
+	p := &poolPolicy{pluginCfg:cfg}
+
+	if err := p.watchConfig(); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
 // NewPoolPolicy creates a CPU plugin stub, initialized with the pool policy.
 func NewPoolPolicy(cfg *pluginConfig) stub.CpuPlugin {
 	log.Info("creating '%s' policy plugin", PolicyPool)
 
-	if plugin, err := stub.NewCpuPlugin(&poolPolicy{pluginCfg:cfg},	PolicyVendor); err != nil {
+	policy, err := initPoolPolicy(cfg)
+	if err != nil {
+		log.Error("failed to initialize poolPolicy instance: %v", err)
+		return nil
+	}
+	if plugin, err := stub.NewCpuPlugin(policy, PolicyVendor); err != nil {
 		log.Error("failed to create CPU policy stub with '%s' policy: %v", PolicyPool, err)
 		return nil
 	} else {
@@ -133,6 +151,9 @@ func (p *poolPolicy) AddContainer(s stub.State, pod *v1.Pod, container *v1.Conta
 	var cset cpuset.CPUSet
 	var err error
 
+	p.Lock()
+	defer p.Unlock()
+
 	if _, ok := p.pools.GetContainerCPUSet(containerID); ok {
 		log.Info("container %s already has allocations, nothing to do", containerID)
 		return nil
@@ -165,6 +186,9 @@ func (p *poolPolicy) AddContainer(s stub.State, pod *v1.Pod, container *v1.Conta
 
 // Release resources of the given container.
 func (p *poolPolicy) RemoveContainer(s stub.State, containerID string) {
+	p.Lock()
+	defer p.Unlock()
+
 	p.pools.ReleaseCPU(containerID)
 	s.Delete(containerID)
 
@@ -231,6 +255,30 @@ func (p *poolPolicy) updateState(s stub.State) error {
 	return nil
 }
 
+// Set up node configuration picker/monitoring.
+func (p *poolPolicy) watchConfig() error {
+	if p.cfgPicker != nil {
+		return nil
+	}
+
+	picker := NewConfigPicker(p.pluginCfg.ConfigDir)
+	notify := func (picker ConfigPicker) {
+		log.Info("node CPU pool configuration has changed...")
+		p.configure()
+	}
+	if err := picker.WatchConfig(notify); err != nil {
+		return err
+	}
+
+	p.cfgPicker = picker
+	return nil
+}
+
+// Pick our configuration file.
+func (p *poolPolicy) pickConfig() (string, error) {
+	return p.cfgPicker.PickConfig(p.pluginCfg.NodeName)
+}
+
 // Reconfigure the pools using the currently active configuration.
 func (p *poolPolicy) configure() error {
 	log.Info("configuring CPU pools from %s", p.pluginCfg.ConfigDir)
@@ -243,6 +291,8 @@ func (p *poolPolicy) configure() error {
 
 	log.Info("CPU pool configuration: %s", p.poolCfg.String())
 
+	p.Lock()
+	defer p.Unlock()
 	if err := p.pools.Reconfigure(p.poolCfg); err != nil {
 		return err
 	}
@@ -321,6 +371,7 @@ func main() {
 	plugin := NewPoolPolicy(cfg)
 
 	if err := plugin.SetupAndServe(); err != nil {
-		log.Panic("failed to start pool CPU policy plugin: %v", err)
+		log.Fatal("failed to start pool CPU policy plugin: %s", err.Error())
 	}
+
 }
