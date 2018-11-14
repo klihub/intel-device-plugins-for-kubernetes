@@ -51,15 +51,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path"
-	"strconv"
 	"strings"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	// "k8s.io/client-go/tools/clientcmd"
 	kubeapi "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
@@ -86,7 +83,16 @@ const (
 	DefaultFlags   CPUFlags = AllocShared | KubePinned
 )
 
-// Configuration for a single CPU pool.
+// Node pool configuration in the filesystem.
+type ConfigFile map[string]ConfigFileEntry
+
+// A single pool entry in the configuration file.
+type ConfigFileEntry struct {
+	Size int            `json:"size,omitempty"`
+	Cpus string         `json:"cpus,omitempty"`
+}
+
+// Runtime configuration for a single CPU pool.
 type Config struct {
 	Size int            `json:"size"`           // number of CPUs to allocate
 	Cpus *cpuset.CPUSet `json:"cpus,omitempty"` // explicit CPUs to allocate, if given
@@ -129,20 +135,10 @@ type PoolSet struct {
 var log = stub.NewLogger(logPrefix)
 
 // Create default node CPU pool configuration.
-func DefaultNodeConfig(numReservedCPUs int, cpuPoolConfig map[string]string) (NodeConfig, error) {
+func DefaultNodeConfig(numReservedCPUs int) (NodeConfig, error) {
 	nc := make(NodeConfig)
 
-	for pool, cfg := range cpuPoolConfig {
-		if pool != ReservedPool && pool != DefaultPool {
-			return NodeConfig{}, fmt.Errorf("default config, invalid pool %s (%s)", pool, cfg)
-		}
-
-		if err := nc.setPoolConfig(pool, cfg); err != nil {
-			return NodeConfig{}, err
-		}
-	}
-
-	if err := nc.setCPUCount(ReservedPool, fmt.Sprintf("@%d", numReservedCPUs)); err != nil {
+	if err := nc.setCPUCount(ReservedPool, numReservedCPUs); err != nil {
 		return NodeConfig{}, err
 	}
 
@@ -153,32 +149,27 @@ func DefaultNodeConfig(numReservedCPUs int, cpuPoolConfig map[string]string) (No
 	return nc, nil
 }
 
-func ParseNodeConfig(numReservedCPUs int, confpath string) (NodeConfig, error) {
-	files, err := ioutil.ReadDir(confpath)
+// Parse node CPU pool configuration.
+func ParseNodeConfig(numReservedCPUs int, path string) (NodeConfig, error) {
+	buf, err := ioutil.ReadFile(path)
+	if err != nil {
+		return NodeConfig{}, fmt.Errorf("failed to parse configuration: %v", err)
+	}
 
-	// maybe no-one loaded a ConfigMap for us?
-	if err != nil || len(files) == 0 {
-		return DefaultNodeConfig(numReservedCPUs, nil)
+	file := make(ConfigFile)
+	if err = json.Unmarshal(buf, &file); err != nil {
+		return NodeConfig{}, fmt.Errorf("failed to parse configuration: %v", err)
 	}
 
 	nc := make(NodeConfig)
-
-	for _, file := range files {
-		if file.Name()[0] == '.' {
-			continue
-		}
-		fileName := path.Join(confpath, file.Name())
-		data, err := ioutil.ReadFile(fileName)
-		if err != nil {
-			log.Warning("Could not read file %s %s", fileName, err.Error())
-			return NodeConfig{}, err
-		}
-		if err := nc.setPoolConfig(file.Name(), string(data[:])); err != nil {
-			return NodeConfig{}, err
+	for pool, cfg := range file {
+		if err := nc.setPoolConfig(pool, cfg); err != nil {
+			return NodeConfig{}, fmt.Errorf("invalid configuration in %s: %v", path, err)
 		}
 	}
 
-	if err := nc.setCPUCount(ReservedPool, fmt.Sprintf("@%d", numReservedCPUs)); err != nil {
+	reservedConfig := ConfigFileEntry{Size: numReservedCPUs}
+	if err := nc.setPoolConfig(ReservedPool, reservedConfig); err != nil {
 		return NodeConfig{}, err
 	}
 
@@ -201,30 +192,30 @@ func (nc NodeConfig) String() string {
 }
 
 // Configure the given pool with the given configuration.
-func (nc NodeConfig) setPoolConfig(pool string, cfg string) error {
+func (nc NodeConfig) setPoolConfig(pool string, cfg ConfigFileEntry) error {
 	if _, ok := nc[pool]; ok {
 		return fmt.Errorf("invalid configuration, multiple entries for pool %s", pool)
 	}
 
-	if cfg[0:1] == "@" {
-		return nc.setCPUCount(pool, cfg)
-	} else if cfg != "*" {
-		return nc.setCPUIds(pool, cfg)
-	} else /* if cfg == "*" */ {
+	if cfg.Size > 0 && cfg.Cpus != "" {
+		return fmt.Errorf("invalid pool %s, both size (%d) and cpus (%s) specified",
+			cfg.Size, cfg.Cpus)
+	}
+
+	if cfg.Size > 0 {
+		return nc.setCPUCount(pool, cfg.Size)
+	} else if cfg.Cpus != "*" {
+		return nc.setCPUIds(pool, cfg.Cpus)
+	} else {
 		return nc.claimLeftoverCpus(pool)
 	}
 }
 
 // Configure the given pool with a given number of CPUs.
-func (nc NodeConfig) setCPUCount(pool string, cfg string) error {
+func (nc NodeConfig) setCPUCount(pool string, cnt int) error {
 
 	if pool == IgnoredPool || pool == OfflinePool {
 		return fmt.Errorf("pool %s cannot be configured with CPU count", pool)
-	}
-
-	cnt, err := strconv.Atoi(cfg[1:])
-	if err != nil {
-		return err
 	}
 
 	if c, ok := nc[pool]; !ok {

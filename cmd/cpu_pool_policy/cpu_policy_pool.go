@@ -69,7 +69,7 @@ type poolPolicy struct {
 	topology        *topology.CPUTopology  // CPU topology information
 	numReservedCPUs int                    // kube+system-reserved CPUs
 	pluginCfg       *pluginConfig          // plugin configuration data
-	cfgPicker       ConfigPicker           // node configuration picker
+	cfgPicker       stub.ConfigPicker      // node configuration picker
 	poolCfg         pool.NodeConfig        // CPU pool configuration
 	pools           *pool.PoolSet          // CPU pools
 }
@@ -255,35 +255,18 @@ func (p *poolPolicy) updateState(s stub.State) error {
 	return nil
 }
 
-// Set up node configuration picker/monitoring.
-func (p *poolPolicy) watchConfig() error {
-	if p.cfgPicker != nil {
-		return nil
-	}
-
-	picker := NewConfigPicker(p.pluginCfg.ConfigDir)
-	notify := func (picker ConfigPicker) {
-		log.Info("node CPU pool configuration has changed...")
-		p.configure()
-	}
-	if err := picker.WatchConfig(notify); err != nil {
-		return err
-	}
-
-	p.cfgPicker = picker
-	return nil
-}
-
-// Pick our configuration file.
-func (p *poolPolicy) pickConfig() (string, error) {
-	return p.cfgPicker.PickConfig(p.pluginCfg.NodeName)
-}
-
 // Reconfigure the pools using the currently active configuration.
 func (p *poolPolicy) configure() error {
 	log.Info("configuring CPU pools from %s", p.pluginCfg.ConfigDir)
 
-	if cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, p.pluginCfg.ConfigDir); err != nil {
+	path, err := p.pickConfig()
+	if err != nil {
+		log.Error("couldn't find configuration for node %s (%v)", p.pluginCfg.ConfigDir, err)
+	} else {
+		log.Info("configuration for node %s: %s", p.pluginCfg.NodeName, path)
+	}
+
+	if cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, path); err != nil {
 		return err
 	} else {
 		p.poolCfg = cfg
@@ -298,6 +281,30 @@ func (p *poolPolicy) configure() error {
 	}
 
 	return nil
+}
+
+// Set up node configuration picker/monitoring.
+func (p *poolPolicy) watchConfig() error {
+	if p.cfgPicker != nil {
+		return nil
+	}
+
+	picker := stub.NewConfigPicker(p.pluginCfg.ConfigDir)
+	notify := func () {
+		log.Info("CPU pool configuration has changed...")
+		p.configure()
+	}
+	if err := picker.WatchConfig(notify); err != nil {
+		return err
+	}
+
+	p.cfgPicker = picker
+	return nil
+}
+
+// Pick our configuration file.
+func (p *poolPolicy) pickConfig() (string, error) {
+	return p.cfgPicker.PickConfig(p.pluginCfg.NodeName)
 }
 
 // Create and initialize a(n empty) pool set.
