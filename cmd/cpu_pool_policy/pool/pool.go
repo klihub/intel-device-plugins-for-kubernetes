@@ -125,6 +125,7 @@ type PoolSet struct {
 	pools      map[string]*Pool      // all CPU pools
 	containers map[string]*Container // containers assignments
 	topology   *topology.CPUTopology // CPU topology info
+	isolated   cpuset.CPUSet         // isolated CPUs
 	allocfn    AllocCPUFunc          // CPU allocator function
 	free       cpuset.CPUSet         // free CPUs
 	reconcile  bool                  // whether needs reconcilation
@@ -334,12 +335,13 @@ func (p *Pool) String() string {
 }
 
 // Create a new CPU pool set with the given configuration.
-func NewPoolSet(cfg NodeConfig, stats *statistics.Stat) (*PoolSet, error) {
+func NewPoolSet(cfg NodeConfig, isolated cpuset.CPUSet, stats *statistics.Stat) (*PoolSet, error) {
 	log.Info("creating new CPU pool set")
 
 	var ps = &PoolSet{
 		pools:      make(map[string]*Pool),
 		containers: make(map[string]*Container),
+		isolated:   isolated,
 		stats:      stats,
 	}
 
@@ -365,7 +367,7 @@ func (ps *PoolSet) Verify() error {
 
 // Check the given configuration for obvious errors.
 func (ps *PoolSet) checkConfig(cfg NodeConfig) error {
-	allCPUs := ps.topology.CPUDetails.CPUs()
+	allCPUs := ps.topology.CPUDetails.CPUs().Difference(ps.isolated)
 	numCPUs := allCPUs.Size()
 	leftover := ""
 
@@ -624,7 +626,7 @@ func (ps *PoolSet) claimLeftoverCPUs(pool string) {
 
 // Get the full set of CPUs in the pool set.
 func (ps *PoolSet) getFreeCPUs() {
-	ps.free = ps.topology.CPUDetails.CPUs()
+	ps.free = ps.topology.CPUDetails.CPUs().Difference(ps.isolated)
 	for _, p := range ps.pools {
 		ps.free = ps.free.Difference(p.shared.Union(p.pinned))
 	}
@@ -1090,6 +1092,7 @@ type marshalPoolSet struct {
 	Pools      map[string]*Pool      `json:"pools"`
 	Containers map[string]*Container `json:"containers"`
 	Reconcile  bool                  `json:"reconcile"`
+	Isolated   cpuset.CPUSet         `json:"isolcpus"`
 }
 
 func (ps PoolSet) MarshalJSON() ([]byte, error) {
@@ -1097,6 +1100,7 @@ func (ps PoolSet) MarshalJSON() ([]byte, error) {
 		Pools:      ps.pools,
 		Containers: ps.containers,
 		Reconcile:  ps.reconcile,
+		Isolated:   ps.isolated,
 	})
 }
 
@@ -1111,5 +1115,10 @@ func (ps *PoolSet) UnmarshalJSON(b []byte) error {
 	ps.containers = m.Containers
 	ps.reconcile = m.Reconcile
 
-	return nil
+	if ps.isolated.Equals(m.Isolated) {
+		return nil
+	}
+
+	return fmt.Errorf("isolated cpuset changed (%s -> %s)",
+		m.Isolated.String(), ps.isolated.String())
 }
