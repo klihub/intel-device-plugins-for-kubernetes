@@ -68,6 +68,7 @@ type poolPolicy struct {
 	sync.Mutex
 	topology        *topology.CPUTopology  // CPU topology information
 	numReservedCPUs int                    // kube+system-reserved CPUs
+	isolatedCPUs    cpuset.CPUSet          // isolated CPUs
 	pluginCfg       *pluginConfig          // plugin configuration data
 	cfgPicker       stub.ConfigPicker      // node configuration picker
 	poolCfg         pool.NodeConfig        // CPU pool configuration
@@ -111,10 +112,16 @@ func (p *poolPolicy) Name() string {
 
 // NewPolicy is the 'constructor', called when the policy gets registered with the CPUManager.
 func (p *poolPolicy) NewPolicy(topology *topology.CPUTopology, numReservedCPUs int) error {
-	log.Info("CPU topology set to %+v, %d CPUs to be reserved", topology, numReservedCPUs)
+	var kcl stub.KernelCmdline
+
+	isolated, err := kcl.IsolatedCPUSet()
+	if err != nil {
+		return err
+	}
 
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
+	p.isolatedCPUs = isolated
 
 	return nil
 }
@@ -316,7 +323,7 @@ func (p *poolPolicy) createPools() error {
 		return err
 	}
 
-	p.pools, err = pool.NewPoolSet(nil, metrics)
+	p.pools, err = pool.NewPoolSet(nil, p.isolatedCPUs, metrics)
 	if err != nil {
 		return err
 	}
