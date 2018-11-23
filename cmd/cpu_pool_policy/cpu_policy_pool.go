@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"fmt"
 	"flag"
 	"os"
 	"sync"
@@ -383,6 +384,22 @@ func getPluginConfig() *pluginConfig {
 func main() {
 	cfg := getPluginConfig()
 	plugin := NewPoolPolicy(cfg)
+
+	sys, err := stub.DiscoverSystemInfo("")
+	if err != nil {
+		fmt.Printf("failed to discover system info: %+v\n", err)
+	} else {
+		fmt.Printf("SystemInfo:\n")
+		for _, pkg := range sys.Packages {
+			fmt.Printf("  package: %+v\n", *pkg)
+		}
+		for _, node := range sys.Nodes {
+			fmt.Printf("  node: %+v\n", *node)
+		}
+		for _, cpu := range sys.Cpus() {
+			fmt.Printf("  cpu: %+v\n", *cpu)
+		}
+	}
 
 	if err := plugin.SetupAndServe(); err != nil {
 		log.Fatal("failed to start pool CPU policy plugin: %s", err.Error())
