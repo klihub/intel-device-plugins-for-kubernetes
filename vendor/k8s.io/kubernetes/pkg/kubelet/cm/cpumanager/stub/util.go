@@ -17,6 +17,9 @@ limitations under the License.
 package stub
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"strconv"
 	"io/ioutil"
@@ -26,6 +29,7 @@ import (
 
 const (
 	cmdlinePath = "/proc/cmdline"
+	systemPath = "/sys/devices/system"
 	isolatedCpus = "isolcpus"
 )
 
@@ -68,7 +72,7 @@ func (kcl *KernelCmdline) Parse(path string) error {
 	return nil
 }
 
-// Check and parse if necessary the kernel commandline.
+// Parse the kernel commandline if we haven't done so yet.
 func (kcl *KernelCmdline) Check() error {
 	if kcl.Cmdline != "" {
 		return nil
@@ -135,3 +139,321 @@ func (kcl *KernelCmdline) IsolatedCPUSet() (cpuset.CPUSet, error) {
 		return cpuset.NewCPUSet(cpus...), nil
 	}
 }
+
+
+//
+// hardware topology discovery
+//
+
+type MachineInfo struct {
+	Path string
+	Cpus map[int]*CpuInfo
+	Nodes map[int]*NodeInfo
+}
+
+// CpuInfo provides topology information about a single CPU core.
+type CpuInfo struct {
+	Path string     // sysfs path for this CPU
+	Id int          // CPU id
+	NodeId int      // NUMA node id
+	PackageId int   // physical package id
+	Cores []int     // cores in the same package
+	Threads []int   // hyperthreads in the same core
+}
+
+// NodeInfo provides topology information about single NUMA node.
+type NodeInfo struct {
+	Path string     // sysfs path for this node
+	Id int          // node id
+	Distance []int  // distance from other nodes
+	Cpus []int      // cores in this node
+}
+
+
+// Collect and parse machine topology information from sysfs.
+func (m *MachineInfo) Discover(dir string) error {
+	if m.Path != "" {
+		return nil
+	}
+	if dir == "" {
+		dir = systemPath
+	}
+
+	m.Path = dir
+	m.Cpus = make(map[int]*CpuInfo)
+	m.Nodes = make(map[int]*NodeInfo)
+
+	if err := m.DiscoverCpus(filepath.Join(dir, "cpu")); err != nil {
+		return err
+	}
+	if err := m.DiscoverNodes(filepath.Join(dir, "node")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Discover CPU topology information from sysfs.
+func (m *MachineInfo) DiscoverCpus(cpuDir string) error {
+	var entries []os.FileInfo
+	var err error
+
+	if entries, err = ioutil.ReadDir(cpuDir); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		var name string
+		var id int
+
+		if name = entry.Name(); name[0:3] != "cpu" {
+			continue
+		}
+		if id = getEnumId(name); id < 0 {
+			continue
+		}
+
+		cpu := &CpuInfo{ Path: filepath.Join(cpuDir, name), Id: id }
+		m.Cpus[id] = cpu
+		if err = cpu.Discover(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Discover NUMA topology information from sysfs.
+func (m *MachineInfo) DiscoverNodes(nodeDir string) error {
+	var entries []os.FileInfo
+	var err error
+
+	if entries, err = ioutil.ReadDir(nodeDir); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		var name string
+		var id int
+
+		if name = entry.Name(); name[0:4] != "node" {
+			continue
+		}
+		if id = getEnumId(name); id < 0 {
+			continue
+		}
+
+		node := &NodeInfo{ Path: filepath.Join(nodeDir, name), Id: id }
+		m.Nodes[id] = node
+		if err = node.Discover(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Discover machine topology information, if necessary.
+func (m *MachineInfo) check() error {
+	if m.Path != "" {
+		return nil
+	} else {
+		return m.Discover("")
+	}
+}
+
+// Get the CPUs for the given physical package.
+func (m *MachineInfo) PackageCPUs(pkg int) []int {
+	if m.check() != nil {
+		return []int{}
+	}
+
+	cpus := []int{}
+	for id, cpu := range m.Cpus {
+		if cpu.PackageId == pkg {
+			cpus = append(cpus, id)
+		}
+	}
+
+	return cpus
+}
+
+// Get the CPUSet for the given physical package.
+func (m *MachineInfo) PackageCPUSet(pkg int) cpuset.CPUSet {
+	if m.check() != nil {
+		return cpuset.NewCPUSet()
+	}
+
+	b := cpuset.NewBuilder()
+	for id, cpu := range m.Cpus {
+		if cpu.PackageId == pkg {
+			b.Add(id)
+		}
+	}
+	return b.Result()
+}
+
+// Get the CPUs for the given NUMA node.
+func (m *MachineInfo) NodeCPUs(node int) []int {
+	if m.check() != nil {
+		return []int{}
+	}
+
+	cpus := []int{}
+	for id, cpu := range m.Cpus {
+		if cpu.NodeId == node {
+			cpus = append(cpus, id)
+		}
+	}
+
+	return cpus
+}
+
+// Get the CPUSet for the given NUMA node.
+func (m *MachineInfo) NodeCPUSet(node int) cpuset.CPUSet {
+	if m.check() != nil {
+		return cpuset.NewCPUSet()
+	}
+
+	b := cpuset.NewBuilder()
+	for id, cpu := range m.Cpus {
+		if cpu.NodeId == node {
+			b.Add(id)
+		}
+	}
+	return b.Result()
+}
+
+// Discover topology for a CPU.
+func (cpu *CpuInfo) Discover() error {
+	var nodes []string
+	var err error
+
+	if nodes, err = filepath.Glob(filepath.Join(cpu.Path, "node[0-9]*")); err != nil {
+		return err
+	}
+	if len(nodes) != 1 {
+		return fmt.Errorf("failed discover node for CPU#%d", cpu.Id)
+	}
+
+	if cpu.NodeId = getEnumId(nodes[0]); cpu.NodeId < 0 {
+		return fmt.Errorf("failed to discover node for CPU#%d", cpu.Id)
+
+	}
+	if _, err = getEntry(cpu.Path, "topology/physical_package_id", &cpu.PackageId); err != nil {
+		return err
+	}
+	if _, err = getEntry(cpu.Path, "topology/core_siblings_list", &cpu.Cores); err != nil {
+		return err
+	}
+	if _, err  = getEntry(cpu.Path, "topology/thread_siblings_list", &cpu.Threads); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Discover topology information for a node.
+func (node *NodeInfo) Discover() error {
+	var err error
+
+	if _, err = getEntry(node.Path, "distance", &node.Distance); err != nil {
+		return err
+	}
+	if _, err = getEntry(node.Path, "cpulist", &node.Cpus); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Read, parse, and convert the given entry to an entry-specific type/format.
+func getEntry(base, path string, ptr interface{}) (string, error) {
+	var entry string
+	var err error
+
+	if blob, err := ioutil.ReadFile(filepath.Join(base, path)); err != nil {
+		return "", err
+	} else {
+		entry = strings.Trim(string(blob), "\n")
+
+		if ptr == interface{}(nil) {
+			return entry, nil
+		}
+	}
+
+	switch ptr.(type) {
+	case *int:
+		intp := ptr.(*int)
+		if *intp, err = strconv.Atoi(entry); err != nil {
+			return "", err
+		}
+		return entry, nil
+
+	case *string:
+		strp := ptr.(*string)
+		*strp = entry
+		return entry, nil
+
+	case *[]string:
+		var sep string
+		strsp := ptr.(*[]string)
+		if strings.IndexAny(entry, ",") > -1 {
+			sep = ","
+		} else {
+			sep = " "
+		}
+		*strsp = strings.Split(entry, sep)
+		return entry, nil
+
+	case *[]int:
+		var str, sep string
+		var val int
+		intsp := ptr.(*[]int)
+		if strings.IndexAny(entry, ",") > -1 {
+			sep = ","
+		} else {
+			sep = " "
+		}
+		strs := strings.Split(entry, sep)
+		*intsp = []int{}
+		for _, str = range strs {
+			rng := strings.Split(str, "-")
+			if len(rng) == 2 {
+				var beg, end int
+
+				if beg, err = strconv.Atoi(rng[0]); err != nil {
+					return "", err
+				}
+				if end, err = strconv.Atoi(rng[1]); err != nil {
+					return "", err
+				}
+				for val := beg; val <= end; val++ {
+					*intsp = append(*intsp, val)
+				}
+			} else {
+				if val, err = strconv.Atoi(rng[0]); err != nil {
+					return "", err
+				}
+				*intsp = append(*intsp, val)
+			}
+		}
+		return entry, nil
+
+	default:
+		return "", fmt.Errorf("unsupported entry type %T", ptr)
+	}
+}
+
+// Get the enumerated id from a CPU or node name.
+func getEnumId(str string) int {
+	idx := strings.LastIndexAny(str, "0123456789")
+	if idx < 0 {
+		return -1
+	}
+	id, err := strconv.Atoi(str[idx:])
+	if err != nil {
+		return -1
+	}
+
+	return id
+}
+
