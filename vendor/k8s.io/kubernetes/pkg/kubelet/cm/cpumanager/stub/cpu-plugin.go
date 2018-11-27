@@ -240,11 +240,10 @@ func (p *cpuPlugin) RegisterWithCPUManager() error {
 		grpc.WithDialer(func (socket string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", socket, timeout)
 		}))
-	defer conn.Close()
-
 	if err != nil {
 		return fmt.Errorf("cannot connect to CPUManager: %+v", err)
 	}
+	defer conn.Close()
 
 	client := api.NewRegistrationClient(conn)
 	_, err = client.Register(context.Background(),
