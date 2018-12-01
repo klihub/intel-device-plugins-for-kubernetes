@@ -332,12 +332,12 @@ func (cpu *CpuInfo) Discover() error {
 	return nil
 }
 
-// ThreadCpus returns the ids of all hyperthreads.
+// ThreadCpus returns the ids of all hyperthreads. XXX TODO: remove this (== .Cpus())
 func (cpu *CpuInfo) ThreadCpus() []int {
 	return cpu.Threads
 }
 
-// ThreadCPUSet returns the ids of all hyperthreads as a CPUSet.
+// ThreadCPUSet returns the ids of all hyperthreads as a CPUSet. XXX TODO: remove this (== .CPUSet())
 func (cpu *CpuInfo) ThreadCPUSet() cpuset.CPUSet {
 	return cpuset.NewCPUSet(cpu.Threads...)
 }
@@ -389,6 +389,11 @@ func (pkg *PackageInfo) CPUSet() cpuset.CPUSet {
 // CpuCount returns the number of CPU cores.
 func (cpu *CpuInfo) CpuCount() int {
 	return len(cpu.Threads)
+}
+
+// Cpus returns the ids of all hyperthreads.
+func (cpu *CpuInfo) Cpus() []int {
+	return cpu.Threads
 }
 
 // CPUSet returns the hyperthread cores as a CPUSet.
