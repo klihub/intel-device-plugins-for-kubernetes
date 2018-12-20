@@ -20,7 +20,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	api "k8s.io/kubernetes/pkg/kubelet/apis/cpuplugin/v1alpha"
+	api "k8s.io/kubernetes/pkg/kubelet/apis/cpuplugin/v1draft1"
 )
 
 //

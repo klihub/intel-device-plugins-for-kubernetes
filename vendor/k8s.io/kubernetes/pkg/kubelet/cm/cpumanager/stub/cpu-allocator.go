@@ -434,7 +434,7 @@ func (a *allocator) Allocate() cpuset.CPUSet {
 	// Next, allocate full idle cores if possible.
 	//     Sort idle cores so that the ones which don't overlap
 	//     with any idle NUMA nodes come first. IOW, we try to keep
-	//     idle NUMA nodes intact for potential tuture full node
+	//     idle NUMA nodes intact for potential future full node
 	//     allocations if at all possible.
 	a.cores.Pick(a.cores.PickAll, nil, nil)
 	cores := a.cores.Sort(func (cores []*CpuInfo, i, j int) bool {
