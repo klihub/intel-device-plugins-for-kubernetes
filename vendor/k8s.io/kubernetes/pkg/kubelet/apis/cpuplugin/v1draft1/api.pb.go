@@ -19,7 +19,7 @@ limitations under the License.
 // DO NOT EDIT!
 
 /*
-	Package v1alpha is a generated protocol buffer package.
+	Package v1draft1 is a generated protocol buffer package.
 
 	It is generated from these files:
 		api.proto
@@ -36,15 +36,15 @@ limitations under the License.
 		State
 		ContainerHint
 		RegisterRequest
-		ConfigureRequest
-		ConfigureResponse
+		StartRequest
+		StartResponse
 		AddContainerRequest
 		AddContainerResponse
 		RemoveContainerRequest
 		RemoveContainerResponse
 		UpdateContainerEvent
 */
-package v1alpha
+package v1draft1
 
 import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
@@ -318,10 +318,6 @@ type ContainerHint struct {
 	Memory string `protobuf:"bytes,3,opt,name=memory,proto3" json:"memory,omitempty"`
 	// Container cache confguration.
 	Cache string `protobuf:"bytes,4,opt,name=cache,proto3" json:"cache,omitempty"`
-	// AddContainer: environment variables to set in the container.
-	Environment map[string]string `protobuf:"bytes,5,rep,name=environment" json:"environment,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// AddContainer: *extra* annotations to put on the container.
-	Annotations map[string]string `protobuf:"bytes,6,rep,name=annotations" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
 func (m *ContainerHint) Reset()                    { *m = ContainerHint{} }
@@ -354,20 +350,6 @@ func (m *ContainerHint) GetCache() string {
 		return m.Cache
 	}
 	return ""
-}
-
-func (m *ContainerHint) GetEnvironment() map[string]string {
-	if m != nil {
-		return m.Environment
-	}
-	return nil
-}
-
-func (m *ContainerHint) GetAnnotations() map[string]string {
-	if m != nil {
-		return m.Annotations
-	}
-	return nil
 }
 
 type RegisterRequest struct {
@@ -404,8 +386,8 @@ func (m *RegisterRequest) GetVendor() string {
 	return ""
 }
 
-// Data for configuring/starting the plugin.
-type ConfigureRequest struct {
+// Data for starting the plugin.
+type StartRequest struct {
 	// CPU topology information
 	Topology *CPUTopology `protobuf:"bytes,1,opt,name=topology" json:"topology,omitempty"`
 	// Number of system- and kube-reserved CPUs.
@@ -414,25 +396,25 @@ type ConfigureRequest struct {
 	State *State `protobuf:"bytes,3,opt,name=state" json:"state,omitempty"`
 }
 
-func (m *ConfigureRequest) Reset()                    { *m = ConfigureRequest{} }
-func (*ConfigureRequest) ProtoMessage()               {}
-func (*ConfigureRequest) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{11} }
+func (m *StartRequest) Reset()                    { *m = StartRequest{} }
+func (*StartRequest) ProtoMessage()               {}
+func (*StartRequest) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{11} }
 
-func (m *ConfigureRequest) GetTopology() *CPUTopology {
+func (m *StartRequest) GetTopology() *CPUTopology {
 	if m != nil {
 		return m.Topology
 	}
 	return nil
 }
 
-func (m *ConfigureRequest) GetNumReservedCPUs() int32 {
+func (m *StartRequest) GetNumReservedCPUs() int32 {
 	if m != nil {
 		return m.NumReservedCPUs
 	}
 	return 0
 }
 
-func (m *ConfigureRequest) GetState() *State {
+func (m *StartRequest) GetState() *State {
 	if m != nil {
 		return m.State
 	}
@@ -440,36 +422,27 @@ func (m *ConfigureRequest) GetState() *State {
 }
 
 // Plugin resources declarations, updated state.
-type ConfigureResponse struct {
+type StartResponse struct {
 	// Declared resources.
 	Resources map[string]*Quantity `protobuf:"bytes,1,rep,name=resources" json:"resources,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value"`
 	// State updates, if any.
 	State *State `protobuf:"bytes,2,opt,name=state" json:"state,omitempty"`
-	// *Extra* node annotations, if any.
-	Annotations map[string]string `protobuf:"bytes,3,rep,name=annotations" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *ConfigureResponse) Reset()                    { *m = ConfigureResponse{} }
-func (*ConfigureResponse) ProtoMessage()               {}
-func (*ConfigureResponse) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{12} }
+func (m *StartResponse) Reset()                    { *m = StartResponse{} }
+func (*StartResponse) ProtoMessage()               {}
+func (*StartResponse) Descriptor() ([]byte, []int) { return fileDescriptorApi, []int{12} }
 
-func (m *ConfigureResponse) GetResources() map[string]*Quantity {
+func (m *StartResponse) GetResources() map[string]*Quantity {
 	if m != nil {
 		return m.Resources
 	}
 	return nil
 }
 
-func (m *ConfigureResponse) GetState() *State {
+func (m *StartResponse) GetState() *State {
 	if m != nil {
 		return m.State
-	}
-	return nil
-}
-
-func (m *ConfigureResponse) GetAnnotations() map[string]string {
-	if m != nil {
-		return m.Annotations
 	}
 	return nil
 }
@@ -636,24 +609,24 @@ func (m *UpdateContainerEvent) GetState() *State {
 }
 
 func init() {
-	proto.RegisterType((*Empty)(nil), "v1alpha.Empty")
-	proto.RegisterType((*Quantity)(nil), "v1alpha.Quantity")
-	proto.RegisterType((*ResourceRequirements)(nil), "v1alpha.ResourceRequirements")
-	proto.RegisterType((*PodSpec)(nil), "v1alpha.PodSpec")
-	proto.RegisterType((*Pod)(nil), "v1alpha.Pod")
-	proto.RegisterType((*Container)(nil), "v1alpha.Container")
-	proto.RegisterType((*CPUInfo)(nil), "v1alpha.CPUInfo")
-	proto.RegisterType((*CPUTopology)(nil), "v1alpha.CPUTopology")
-	proto.RegisterType((*State)(nil), "v1alpha.State")
-	proto.RegisterType((*ContainerHint)(nil), "v1alpha.ContainerHint")
-	proto.RegisterType((*RegisterRequest)(nil), "v1alpha.RegisterRequest")
-	proto.RegisterType((*ConfigureRequest)(nil), "v1alpha.ConfigureRequest")
-	proto.RegisterType((*ConfigureResponse)(nil), "v1alpha.ConfigureResponse")
-	proto.RegisterType((*AddContainerRequest)(nil), "v1alpha.AddContainerRequest")
-	proto.RegisterType((*AddContainerResponse)(nil), "v1alpha.AddContainerResponse")
-	proto.RegisterType((*RemoveContainerRequest)(nil), "v1alpha.RemoveContainerRequest")
-	proto.RegisterType((*RemoveContainerResponse)(nil), "v1alpha.RemoveContainerResponse")
-	proto.RegisterType((*UpdateContainerEvent)(nil), "v1alpha.UpdateContainerEvent")
+	proto.RegisterType((*Empty)(nil), "v1draft1.Empty")
+	proto.RegisterType((*Quantity)(nil), "v1draft1.Quantity")
+	proto.RegisterType((*ResourceRequirements)(nil), "v1draft1.ResourceRequirements")
+	proto.RegisterType((*PodSpec)(nil), "v1draft1.PodSpec")
+	proto.RegisterType((*Pod)(nil), "v1draft1.Pod")
+	proto.RegisterType((*Container)(nil), "v1draft1.Container")
+	proto.RegisterType((*CPUInfo)(nil), "v1draft1.CPUInfo")
+	proto.RegisterType((*CPUTopology)(nil), "v1draft1.CPUTopology")
+	proto.RegisterType((*State)(nil), "v1draft1.State")
+	proto.RegisterType((*ContainerHint)(nil), "v1draft1.ContainerHint")
+	proto.RegisterType((*RegisterRequest)(nil), "v1draft1.RegisterRequest")
+	proto.RegisterType((*StartRequest)(nil), "v1draft1.StartRequest")
+	proto.RegisterType((*StartResponse)(nil), "v1draft1.StartResponse")
+	proto.RegisterType((*AddContainerRequest)(nil), "v1draft1.AddContainerRequest")
+	proto.RegisterType((*AddContainerResponse)(nil), "v1draft1.AddContainerResponse")
+	proto.RegisterType((*RemoveContainerRequest)(nil), "v1draft1.RemoveContainerRequest")
+	proto.RegisterType((*RemoveContainerResponse)(nil), "v1draft1.RemoveContainerResponse")
+	proto.RegisterType((*UpdateContainerEvent)(nil), "v1draft1.UpdateContainerEvent")
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -680,7 +653,7 @@ func NewRegistrationClient(cc *grpc.ClientConn) RegistrationClient {
 
 func (c *registrationClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := grpc.Invoke(ctx, "/v1alpha.Registration/Register", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/v1draft1.Registration/Register", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -707,7 +680,7 @@ func _Registration_Register_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1alpha.Registration/Register",
+		FullMethod: "/v1draft1.Registration/Register",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegistrationServer).Register(ctx, req.(*RegisterRequest))
@@ -716,7 +689,7 @@ func _Registration_Register_Handler(srv interface{}, ctx context.Context, dec fu
 }
 
 var _Registration_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "v1alpha.Registration",
+	ServiceName: "v1draft1.Registration",
 	HandlerType: (*RegistrationServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -731,20 +704,20 @@ var _Registration_serviceDesc = grpc.ServiceDesc{
 // Client API for CpuPlugin service
 
 type CpuPluginClient interface {
-	// Configure (and start) the policy plugin.
-	Configure(ctx context.Context, in *ConfigureRequest, opts ...grpc.CallOption) (*ConfigureResponse, error)
+	// Start the policy plugin.
+	Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
 	// Allocate resources for the given container.
 	AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error)
 	// Release resources of the given container.
 	RemoveContainer(ctx context.Context, in *RemoveContainerRequest, opts ...grpc.CallOption) (*RemoveContainerResponse, error)
-	// GetContainerUpdates listens to a stream of container updates. Unlike responses
+	// WatchContainerUpdates listens to a stream of container updates. Unlike responses
 	// these are unsolicited container reconfiguration events which are not in direct
 	// response to an AddContainer or RemoveContainer request. They are typically
 	// triggered by events outside of the realm of the K8s CPUManager, for instance by
 	// and external (to K8s) entity reconfiguring the currently active policy without
 	// restarting kubelet. It is perfectly fine for a policy implementation to never
 	// generate such events.
-	GetContainerUpdates(ctx context.Context, in *Empty, opts ...grpc.CallOption) (CpuPlugin_GetContainerUpdatesClient, error)
+	WatchContainerUpdates(ctx context.Context, in *Empty, opts ...grpc.CallOption) (CpuPlugin_WatchContainerUpdatesClient, error)
 }
 
 type cpuPluginClient struct {
@@ -755,9 +728,9 @@ func NewCpuPluginClient(cc *grpc.ClientConn) CpuPluginClient {
 	return &cpuPluginClient{cc}
 }
 
-func (c *cpuPluginClient) Configure(ctx context.Context, in *ConfigureRequest, opts ...grpc.CallOption) (*ConfigureResponse, error) {
-	out := new(ConfigureResponse)
-	err := grpc.Invoke(ctx, "/v1alpha.CpuPlugin/Configure", in, out, c.cc, opts...)
+func (c *cpuPluginClient) Start(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error) {
+	out := new(StartResponse)
+	err := grpc.Invoke(ctx, "/v1draft1.CpuPlugin/Start", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -766,7 +739,7 @@ func (c *cpuPluginClient) Configure(ctx context.Context, in *ConfigureRequest, o
 
 func (c *cpuPluginClient) AddContainer(ctx context.Context, in *AddContainerRequest, opts ...grpc.CallOption) (*AddContainerResponse, error) {
 	out := new(AddContainerResponse)
-	err := grpc.Invoke(ctx, "/v1alpha.CpuPlugin/AddContainer", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/v1draft1.CpuPlugin/AddContainer", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -775,19 +748,19 @@ func (c *cpuPluginClient) AddContainer(ctx context.Context, in *AddContainerRequ
 
 func (c *cpuPluginClient) RemoveContainer(ctx context.Context, in *RemoveContainerRequest, opts ...grpc.CallOption) (*RemoveContainerResponse, error) {
 	out := new(RemoveContainerResponse)
-	err := grpc.Invoke(ctx, "/v1alpha.CpuPlugin/RemoveContainer", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/v1draft1.CpuPlugin/RemoveContainer", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *cpuPluginClient) GetContainerUpdates(ctx context.Context, in *Empty, opts ...grpc.CallOption) (CpuPlugin_GetContainerUpdatesClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_CpuPlugin_serviceDesc.Streams[0], c.cc, "/v1alpha.CpuPlugin/GetContainerUpdates", opts...)
+func (c *cpuPluginClient) WatchContainerUpdates(ctx context.Context, in *Empty, opts ...grpc.CallOption) (CpuPlugin_WatchContainerUpdatesClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_CpuPlugin_serviceDesc.Streams[0], c.cc, "/v1draft1.CpuPlugin/WatchContainerUpdates", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &cpuPluginGetContainerUpdatesClient{stream}
+	x := &cpuPluginWatchContainerUpdatesClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -797,16 +770,16 @@ func (c *cpuPluginClient) GetContainerUpdates(ctx context.Context, in *Empty, op
 	return x, nil
 }
 
-type CpuPlugin_GetContainerUpdatesClient interface {
+type CpuPlugin_WatchContainerUpdatesClient interface {
 	Recv() (*UpdateContainerEvent, error)
 	grpc.ClientStream
 }
 
-type cpuPluginGetContainerUpdatesClient struct {
+type cpuPluginWatchContainerUpdatesClient struct {
 	grpc.ClientStream
 }
 
-func (x *cpuPluginGetContainerUpdatesClient) Recv() (*UpdateContainerEvent, error) {
+func (x *cpuPluginWatchContainerUpdatesClient) Recv() (*UpdateContainerEvent, error) {
 	m := new(UpdateContainerEvent)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -817,40 +790,40 @@ func (x *cpuPluginGetContainerUpdatesClient) Recv() (*UpdateContainerEvent, erro
 // Server API for CpuPlugin service
 
 type CpuPluginServer interface {
-	// Configure (and start) the policy plugin.
-	Configure(context.Context, *ConfigureRequest) (*ConfigureResponse, error)
+	// Start the policy plugin.
+	Start(context.Context, *StartRequest) (*StartResponse, error)
 	// Allocate resources for the given container.
 	AddContainer(context.Context, *AddContainerRequest) (*AddContainerResponse, error)
 	// Release resources of the given container.
 	RemoveContainer(context.Context, *RemoveContainerRequest) (*RemoveContainerResponse, error)
-	// GetContainerUpdates listens to a stream of container updates. Unlike responses
+	// WatchContainerUpdates listens to a stream of container updates. Unlike responses
 	// these are unsolicited container reconfiguration events which are not in direct
 	// response to an AddContainer or RemoveContainer request. They are typically
 	// triggered by events outside of the realm of the K8s CPUManager, for instance by
 	// and external (to K8s) entity reconfiguring the currently active policy without
 	// restarting kubelet. It is perfectly fine for a policy implementation to never
 	// generate such events.
-	GetContainerUpdates(*Empty, CpuPlugin_GetContainerUpdatesServer) error
+	WatchContainerUpdates(*Empty, CpuPlugin_WatchContainerUpdatesServer) error
 }
 
 func RegisterCpuPluginServer(s *grpc.Server, srv CpuPluginServer) {
 	s.RegisterService(&_CpuPlugin_serviceDesc, srv)
 }
 
-func _CpuPlugin_Configure_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ConfigureRequest)
+func _CpuPlugin_Start_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CpuPluginServer).Configure(ctx, in)
+		return srv.(CpuPluginServer).Start(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1alpha.CpuPlugin/Configure",
+		FullMethod: "/v1draft1.CpuPlugin/Start",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CpuPluginServer).Configure(ctx, req.(*ConfigureRequest))
+		return srv.(CpuPluginServer).Start(ctx, req.(*StartRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -865,7 +838,7 @@ func _CpuPlugin_AddContainer_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1alpha.CpuPlugin/AddContainer",
+		FullMethod: "/v1draft1.CpuPlugin/AddContainer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CpuPluginServer).AddContainer(ctx, req.(*AddContainerRequest))
@@ -883,7 +856,7 @@ func _CpuPlugin_RemoveContainer_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/v1alpha.CpuPlugin/RemoveContainer",
+		FullMethod: "/v1draft1.CpuPlugin/RemoveContainer",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CpuPluginServer).RemoveContainer(ctx, req.(*RemoveContainerRequest))
@@ -891,34 +864,34 @@ func _CpuPlugin_RemoveContainer_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CpuPlugin_GetContainerUpdates_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _CpuPlugin_WatchContainerUpdates_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(Empty)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(CpuPluginServer).GetContainerUpdates(m, &cpuPluginGetContainerUpdatesServer{stream})
+	return srv.(CpuPluginServer).WatchContainerUpdates(m, &cpuPluginWatchContainerUpdatesServer{stream})
 }
 
-type CpuPlugin_GetContainerUpdatesServer interface {
+type CpuPlugin_WatchContainerUpdatesServer interface {
 	Send(*UpdateContainerEvent) error
 	grpc.ServerStream
 }
 
-type cpuPluginGetContainerUpdatesServer struct {
+type cpuPluginWatchContainerUpdatesServer struct {
 	grpc.ServerStream
 }
 
-func (x *cpuPluginGetContainerUpdatesServer) Send(m *UpdateContainerEvent) error {
+func (x *cpuPluginWatchContainerUpdatesServer) Send(m *UpdateContainerEvent) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 var _CpuPlugin_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "v1alpha.CpuPlugin",
+	ServiceName: "v1draft1.CpuPlugin",
 	HandlerType: (*CpuPluginServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Configure",
-			Handler:    _CpuPlugin_Configure_Handler,
+			MethodName: "Start",
+			Handler:    _CpuPlugin_Start_Handler,
 		},
 		{
 			MethodName: "AddContainer",
@@ -931,8 +904,8 @@ var _CpuPlugin_serviceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "GetContainerUpdates",
-			Handler:       _CpuPlugin_GetContainerUpdates_Handler,
+			StreamName:    "WatchContainerUpdates",
+			Handler:       _CpuPlugin_WatchContainerUpdates_Handler,
 			ServerStreams: true,
 		},
 	},
@@ -1361,40 +1334,6 @@ func (m *ContainerHint) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintApi(dAtA, i, uint64(len(m.Cache)))
 		i += copy(dAtA[i:], m.Cache)
 	}
-	if len(m.Environment) > 0 {
-		for k := range m.Environment {
-			dAtA[i] = 0x2a
-			i++
-			v := m.Environment[k]
-			mapSize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
-			i = encodeVarintApi(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintApi(dAtA, i, uint64(len(k)))
-			i += copy(dAtA[i:], k)
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintApi(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
-		}
-	}
-	if len(m.Annotations) > 0 {
-		for k := range m.Annotations {
-			dAtA[i] = 0x32
-			i++
-			v := m.Annotations[k]
-			mapSize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
-			i = encodeVarintApi(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintApi(dAtA, i, uint64(len(k)))
-			i += copy(dAtA[i:], k)
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintApi(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
-		}
-	}
 	return i, nil
 }
 
@@ -1434,7 +1373,7 @@ func (m *RegisterRequest) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *ConfigureRequest) Marshal() (dAtA []byte, err error) {
+func (m *StartRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -1444,7 +1383,7 @@ func (m *ConfigureRequest) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ConfigureRequest) MarshalTo(dAtA []byte) (int, error) {
+func (m *StartRequest) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1477,7 +1416,7 @@ func (m *ConfigureRequest) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *ConfigureResponse) Marshal() (dAtA []byte, err error) {
+func (m *StartResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
 	n, err := m.MarshalTo(dAtA)
@@ -1487,7 +1426,7 @@ func (m *ConfigureResponse) Marshal() (dAtA []byte, err error) {
 	return dAtA[:n], nil
 }
 
-func (m *ConfigureResponse) MarshalTo(dAtA []byte) (int, error) {
+func (m *StartResponse) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1529,23 +1468,6 @@ func (m *ConfigureResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i += n9
-	}
-	if len(m.Annotations) > 0 {
-		for k := range m.Annotations {
-			dAtA[i] = 0x1a
-			i++
-			v := m.Annotations[k]
-			mapSize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
-			i = encodeVarintApi(dAtA, i, uint64(mapSize))
-			dAtA[i] = 0xa
-			i++
-			i = encodeVarintApi(dAtA, i, uint64(len(k)))
-			i += copy(dAtA[i:], k)
-			dAtA[i] = 0x12
-			i++
-			i = encodeVarintApi(dAtA, i, uint64(len(v)))
-			i += copy(dAtA[i:], v)
-		}
 	}
 	return i, nil
 }
@@ -2084,22 +2006,6 @@ func (m *ContainerHint) Size() (n int) {
 	if l > 0 {
 		n += 1 + l + sovApi(uint64(l))
 	}
-	if len(m.Environment) > 0 {
-		for k, v := range m.Environment {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
-			n += mapEntrySize + 1 + sovApi(uint64(mapEntrySize))
-		}
-	}
-	if len(m.Annotations) > 0 {
-		for k, v := range m.Annotations {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
-			n += mapEntrySize + 1 + sovApi(uint64(mapEntrySize))
-		}
-	}
 	return n
 }
 
@@ -2121,7 +2027,7 @@ func (m *RegisterRequest) Size() (n int) {
 	return n
 }
 
-func (m *ConfigureRequest) Size() (n int) {
+func (m *StartRequest) Size() (n int) {
 	var l int
 	_ = l
 	if m.Topology != nil {
@@ -2138,7 +2044,7 @@ func (m *ConfigureRequest) Size() (n int) {
 	return n
 }
 
-func (m *ConfigureResponse) Size() (n int) {
+func (m *StartResponse) Size() (n int) {
 	var l int
 	_ = l
 	if len(m.Resources) > 0 {
@@ -2157,14 +2063,6 @@ func (m *ConfigureResponse) Size() (n int) {
 	if m.State != nil {
 		l = m.State.Size()
 		n += 1 + l + sovApi(uint64(l))
-	}
-	if len(m.Annotations) > 0 {
-		for k, v := range m.Annotations {
-			_ = k
-			_ = v
-			mapEntrySize := 1 + len(k) + sovApi(uint64(len(k))) + 1 + len(v) + sovApi(uint64(len(v)))
-			n += mapEntrySize + 1 + sovApi(uint64(mapEntrySize))
-		}
 	}
 	return n
 }
@@ -2483,33 +2381,11 @@ func (this *ContainerHint) String() string {
 	if this == nil {
 		return "nil"
 	}
-	keysForEnvironment := make([]string, 0, len(this.Environment))
-	for k := range this.Environment {
-		keysForEnvironment = append(keysForEnvironment, k)
-	}
-	github_com_gogo_protobuf_sortkeys.Strings(keysForEnvironment)
-	mapStringForEnvironment := "map[string]string{"
-	for _, k := range keysForEnvironment {
-		mapStringForEnvironment += fmt.Sprintf("%v: %v,", k, this.Environment[k])
-	}
-	mapStringForEnvironment += "}"
-	keysForAnnotations := make([]string, 0, len(this.Annotations))
-	for k := range this.Annotations {
-		keysForAnnotations = append(keysForAnnotations, k)
-	}
-	github_com_gogo_protobuf_sortkeys.Strings(keysForAnnotations)
-	mapStringForAnnotations := "map[string]string{"
-	for _, k := range keysForAnnotations {
-		mapStringForAnnotations += fmt.Sprintf("%v: %v,", k, this.Annotations[k])
-	}
-	mapStringForAnnotations += "}"
 	s := strings.Join([]string{`&ContainerHint{`,
 		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
 		`Cpuset:` + fmt.Sprintf("%v", this.Cpuset) + `,`,
 		`Memory:` + fmt.Sprintf("%v", this.Memory) + `,`,
 		`Cache:` + fmt.Sprintf("%v", this.Cache) + `,`,
-		`Environment:` + mapStringForEnvironment + `,`,
-		`Annotations:` + mapStringForAnnotations + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2526,11 +2402,11 @@ func (this *RegisterRequest) String() string {
 	}, "")
 	return s
 }
-func (this *ConfigureRequest) String() string {
+func (this *StartRequest) String() string {
 	if this == nil {
 		return "nil"
 	}
-	s := strings.Join([]string{`&ConfigureRequest{`,
+	s := strings.Join([]string{`&StartRequest{`,
 		`Topology:` + strings.Replace(fmt.Sprintf("%v", this.Topology), "CPUTopology", "CPUTopology", 1) + `,`,
 		`NumReservedCPUs:` + fmt.Sprintf("%v", this.NumReservedCPUs) + `,`,
 		`State:` + strings.Replace(fmt.Sprintf("%v", this.State), "State", "State", 1) + `,`,
@@ -2538,7 +2414,7 @@ func (this *ConfigureRequest) String() string {
 	}, "")
 	return s
 }
-func (this *ConfigureResponse) String() string {
+func (this *StartResponse) String() string {
 	if this == nil {
 		return "nil"
 	}
@@ -2552,20 +2428,9 @@ func (this *ConfigureResponse) String() string {
 		mapStringForResources += fmt.Sprintf("%v: %v,", k, this.Resources[k])
 	}
 	mapStringForResources += "}"
-	keysForAnnotations := make([]string, 0, len(this.Annotations))
-	for k := range this.Annotations {
-		keysForAnnotations = append(keysForAnnotations, k)
-	}
-	github_com_gogo_protobuf_sortkeys.Strings(keysForAnnotations)
-	mapStringForAnnotations := "map[string]string{"
-	for _, k := range keysForAnnotations {
-		mapStringForAnnotations += fmt.Sprintf("%v: %v,", k, this.Annotations[k])
-	}
-	mapStringForAnnotations += "}"
-	s := strings.Join([]string{`&ConfigureResponse{`,
+	s := strings.Join([]string{`&StartResponse{`,
 		`Resources:` + mapStringForResources + `,`,
 		`State:` + strings.Replace(fmt.Sprintf("%v", this.State), "State", "State", 1) + `,`,
-		`Annotations:` + mapStringForAnnotations + `,`,
 		`}`,
 	}, "")
 	return s
@@ -4356,238 +4221,6 @@ func (m *ContainerHint) Unmarshal(dAtA []byte) error {
 			}
 			m.Cache = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Environment", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthApi
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			var keykey uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				keykey |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			var stringLenmapkey uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLenmapkey |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLenmapkey := int(stringLenmapkey)
-			if intStringLenmapkey < 0 {
-				return ErrInvalidLengthApi
-			}
-			postStringIndexmapkey := iNdEx + intStringLenmapkey
-			if postStringIndexmapkey > l {
-				return io.ErrUnexpectedEOF
-			}
-			mapkey := string(dAtA[iNdEx:postStringIndexmapkey])
-			iNdEx = postStringIndexmapkey
-			if m.Environment == nil {
-				m.Environment = make(map[string]string)
-			}
-			if iNdEx < postIndex {
-				var valuekey uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowApi
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					valuekey |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				var stringLenmapvalue uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowApi
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				intStringLenmapvalue := int(stringLenmapvalue)
-				if intStringLenmapvalue < 0 {
-					return ErrInvalidLengthApi
-				}
-				postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-				if postStringIndexmapvalue > l {
-					return io.ErrUnexpectedEOF
-				}
-				mapvalue := string(dAtA[iNdEx:postStringIndexmapvalue])
-				iNdEx = postStringIndexmapvalue
-				m.Environment[mapkey] = mapvalue
-			} else {
-				var mapvalue string
-				m.Environment[mapkey] = mapvalue
-			}
-			iNdEx = postIndex
-		case 6:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Annotations", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthApi
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			var keykey uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				keykey |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			var stringLenmapkey uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLenmapkey |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLenmapkey := int(stringLenmapkey)
-			if intStringLenmapkey < 0 {
-				return ErrInvalidLengthApi
-			}
-			postStringIndexmapkey := iNdEx + intStringLenmapkey
-			if postStringIndexmapkey > l {
-				return io.ErrUnexpectedEOF
-			}
-			mapkey := string(dAtA[iNdEx:postStringIndexmapkey])
-			iNdEx = postStringIndexmapkey
-			if m.Annotations == nil {
-				m.Annotations = make(map[string]string)
-			}
-			if iNdEx < postIndex {
-				var valuekey uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowApi
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					valuekey |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				var stringLenmapvalue uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowApi
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				intStringLenmapvalue := int(stringLenmapvalue)
-				if intStringLenmapvalue < 0 {
-					return ErrInvalidLengthApi
-				}
-				postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-				if postStringIndexmapvalue > l {
-					return io.ErrUnexpectedEOF
-				}
-				mapvalue := string(dAtA[iNdEx:postStringIndexmapvalue])
-				iNdEx = postStringIndexmapvalue
-				m.Annotations[mapkey] = mapvalue
-			} else {
-				var mapvalue string
-				m.Annotations[mapkey] = mapvalue
-			}
-			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipApi(dAtA[iNdEx:])
@@ -4746,7 +4379,7 @@ func (m *RegisterRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ConfigureRequest) Unmarshal(dAtA []byte) error {
+func (m *StartRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -4769,10 +4402,10 @@ func (m *ConfigureRequest) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ConfigureRequest: wiretype end group for non-group")
+			return fmt.Errorf("proto: StartRequest: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ConfigureRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: StartRequest: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -4881,7 +4514,7 @@ func (m *ConfigureRequest) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *ConfigureResponse) Unmarshal(dAtA []byte) error {
+func (m *StartResponse) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
@@ -4904,10 +4537,10 @@ func (m *ConfigureResponse) Unmarshal(dAtA []byte) error {
 		fieldNum := int32(wire >> 3)
 		wireType := int(wire & 0x7)
 		if wireType == 4 {
-			return fmt.Errorf("proto: ConfigureResponse: wiretype end group for non-group")
+			return fmt.Errorf("proto: StartResponse: wiretype end group for non-group")
 		}
 		if fieldNum <= 0 {
-			return fmt.Errorf("proto: ConfigureResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+			return fmt.Errorf("proto: StartResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
 		case 1:
@@ -5062,122 +4695,6 @@ func (m *ConfigureResponse) Unmarshal(dAtA []byte) error {
 			}
 			if err := m.State.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
-			}
-			iNdEx = postIndex
-		case 3:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Annotations", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return ErrInvalidLengthApi
-			}
-			postIndex := iNdEx + msglen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			var keykey uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				keykey |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			var stringLenmapkey uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowApi
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLenmapkey |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLenmapkey := int(stringLenmapkey)
-			if intStringLenmapkey < 0 {
-				return ErrInvalidLengthApi
-			}
-			postStringIndexmapkey := iNdEx + intStringLenmapkey
-			if postStringIndexmapkey > l {
-				return io.ErrUnexpectedEOF
-			}
-			mapkey := string(dAtA[iNdEx:postStringIndexmapkey])
-			iNdEx = postStringIndexmapkey
-			if m.Annotations == nil {
-				m.Annotations = make(map[string]string)
-			}
-			if iNdEx < postIndex {
-				var valuekey uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowApi
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					valuekey |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				var stringLenmapvalue uint64
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowApi
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					stringLenmapvalue |= (uint64(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				intStringLenmapvalue := int(stringLenmapvalue)
-				if intStringLenmapvalue < 0 {
-					return ErrInvalidLengthApi
-				}
-				postStringIndexmapvalue := iNdEx + intStringLenmapvalue
-				if postStringIndexmapvalue > l {
-					return io.ErrUnexpectedEOF
-				}
-				mapvalue := string(dAtA[iNdEx:postStringIndexmapvalue])
-				iNdEx = postStringIndexmapvalue
-				m.Annotations[mapkey] = mapvalue
-			} else {
-				var mapvalue string
-				m.Annotations[mapkey] = mapvalue
 			}
 			iNdEx = postIndex
 		default:
@@ -6508,83 +6025,79 @@ var (
 func init() { proto.RegisterFile("api.proto", fileDescriptorApi) }
 
 var fileDescriptorApi = []byte{
-	// 1244 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe4, 0x57, 0xcb, 0x6f, 0x1b, 0x45,
-	0x18, 0xf7, 0x6e, 0x62, 0xc7, 0xfb, 0xb9, 0x69, 0x93, 0x69, 0x14, 0x16, 0xab, 0x75, 0xa3, 0x55,
-	0x44, 0x83, 0x28, 0x6e, 0x08, 0x12, 0xe2, 0x21, 0x2a, 0x19, 0x27, 0xb4, 0x41, 0x6d, 0x6a, 0x36,
-	0xb8, 0x5c, 0xe0, 0xb0, 0xd9, 0x9d, 0x38, 0xab, 0xda, 0x33, 0xcb, 0xce, 0xac, 0x91, 0x6f, 0xfc,
-	0x09, 0x1c, 0xf8, 0x4f, 0xf8, 0x07, 0x10, 0xa7, 0x8a, 0x13, 0x47, 0x8e, 0x34, 0x1c, 0xb9, 0x72,
-	0x82, 0x0b, 0x9a, 0xc7, 0x3e, 0x6c, 0x6f, 0x5c, 0xa2, 0x72, 0x82, 0x9b, 0xbf, 0x99, 0x6f, 0x7e,
-	0xdf, 0xe3, 0xf7, 0x3d, 0xd6, 0x60, 0x79, 0x51, 0xd8, 0x8e, 0x62, 0xca, 0x29, 0x5a, 0x19, 0xbf,
-	0xe5, 0x0d, 0xa3, 0x33, 0xaf, 0xf9, 0xe6, 0x20, 0xe4, 0x67, 0xc9, 0x49, 0xdb, 0xa7, 0xa3, 0xbb,
-	0x03, 0x3a, 0xa0, 0x77, 0xe5, 0xfd, 0x49, 0x72, 0x2a, 0x25, 0x29, 0xc8, 0x5f, 0xea, 0x9d, 0xb3,
-	0x02, 0xd5, 0x83, 0x51, 0xc4, 0x27, 0xce, 0x16, 0xd4, 0x3f, 0x4d, 0x3c, 0xc2, 0x43, 0x3e, 0x41,
-	0x1b, 0x50, 0x7d, 0xe2, 0x0d, 0x13, 0x6c, 0x1b, 0x5b, 0xc6, 0x8e, 0xe5, 0x56, 0xc7, 0x42, 0x70,
-	0x7e, 0x30, 0x61, 0xc3, 0xc5, 0x8c, 0x26, 0xb1, 0x8f, 0x5d, 0xfc, 0x55, 0x12, 0xc6, 0x78, 0x84,
-	0x09, 0x67, 0xa8, 0x03, 0xb5, 0x87, 0xe1, 0x28, 0xe4, 0xcc, 0x36, 0xb6, 0x96, 0x76, 0x1a, 0x7b,
-	0xaf, 0xb7, 0xb5, 0x33, 0xed, 0x32, 0xf5, 0xb6, 0xd2, 0x3d, 0x20, 0x3c, 0x9e, 0xb8, 0xb5, 0xa1,
-	0x14, 0xd0, 0x7d, 0xa8, 0x0b, 0x1d, 0xcc, 0x38, 0xb3, 0x4d, 0x09, 0xf2, 0xc6, 0x62, 0x90, 0x54,
-	0x5b, 0xc1, 0xd4, 0x63, 0x2d, 0x36, 0x1f, 0x42, 0xa3, 0x80, 0x8f, 0xd6, 0x60, 0xe9, 0x29, 0x9e,
-	0xe8, 0x38, 0xc4, 0x4f, 0x74, 0x1b, 0x54, 0x38, 0xb6, 0xb9, 0x65, 0xec, 0x34, 0xf6, 0xd6, 0x33,
-	0x33, 0x69, 0xf4, 0x3a, 0xdc, 0xf7, 0xcd, 0x77, 0x8d, 0xe6, 0x11, 0xac, 0x4e, 0x19, 0x7a, 0x49,
-	0x3c, 0xe7, 0x4b, 0x58, 0xe9, 0xd1, 0xe0, 0x38, 0xc2, 0x3e, 0xda, 0x86, 0xd5, 0x63, 0xff, 0x0c,
-	0x07, 0xc9, 0x10, 0xc7, 0x47, 0xde, 0x28, 0xcd, 0xf5, 0x2a, 0x2b, 0x1e, 0xa2, 0x3b, 0xb0, 0xde,
-	0x8b, 0x43, 0x1a, 0x87, 0x7c, 0xd2, 0x1d, 0x7a, 0x8c, 0x49, 0x4d, 0x53, 0x6a, 0xae, 0x47, 0xb3,
-	0x17, 0xce, 0x4f, 0x06, 0x2c, 0xf5, 0x68, 0x80, 0x10, 0x2c, 0x17, 0x20, 0x97, 0x89, 0x40, 0xba,
-	0x01, 0x96, 0x38, 0x63, 0x91, 0xe7, 0xa7, 0x08, 0x16, 0x49, 0x0f, 0xd0, 0x2e, 0xd4, 0x1e, 0x7a,
-	0x27, 0x78, 0xc8, 0xec, 0x25, 0x99, 0x7d, 0x3b, 0x0b, 0xa3, 0x47, 0x83, 0xb6, 0xba, 0x4a, 0x19,
-	0x93, 0x02, 0xda, 0x86, 0x65, 0x11, 0x87, 0xbd, 0x2c, 0xc3, 0x5e, 0x2b, 0xea, 0x8b, 0x73, 0x77,
-	0x99, 0x45, 0xd8, 0x6f, 0xbe, 0x07, 0x8d, 0xc2, 0xe3, 0x92, 0xf4, 0x6d, 0x14, 0xd3, 0x67, 0x15,
-	0x73, 0xf5, 0x05, 0x58, 0x5d, 0x4a, 0xb8, 0x17, 0x12, 0x1c, 0x97, 0x46, 0xf4, 0x01, 0x58, 0x69,
-	0x69, 0x30, 0x9d, 0xfd, 0x9b, 0x0b, 0x8b, 0xc6, 0xb5, 0xe2, 0x54, 0xdf, 0xf9, 0x10, 0x56, 0xba,
-	0xbd, 0xfe, 0x21, 0x39, 0xa5, 0xa8, 0x09, 0xf5, 0x63, 0xea, 0x3f, 0xc5, 0xfc, 0x70, 0x5f, 0xe2,
-	0x57, 0xdd, 0x3a, 0xd3, 0x32, 0xda, 0x84, 0x5a, 0x97, 0xc6, 0xf8, 0x70, 0x5f, 0x1a, 0xa8, 0xba,
-	0x35, 0x5f, 0x4a, 0xce, 0x9f, 0x06, 0x34, 0xba, 0xbd, 0xfe, 0x67, 0x34, 0xa2, 0x43, 0x3a, 0x98,
-	0x20, 0x1b, 0x56, 0x8e, 0x92, 0x51, 0xb7, 0xd7, 0x67, 0x1a, 0x62, 0x85, 0x28, 0x51, 0xa0, 0x8b,
-	0x1b, 0x1a, 0x6b, 0x27, 0xab, 0x6e, 0x9d, 0x68, 0x19, 0xb5, 0x00, 0x8e, 0x92, 0x91, 0x32, 0x2e,
-	0x32, 0x2f, 0x6e, 0x81, 0x64, 0x27, 0x68, 0x1f, 0xa0, 0xdb, 0xeb, 0xef, 0x63, 0xee, 0x85, 0x43,
-	0x66, 0x2f, 0x4b, 0x66, 0xb6, 0xb3, 0x10, 0x0b, 0xf6, 0xdb, 0xb9, 0x9a, 0x62, 0x09, 0xfc, 0xec,
-	0xa0, 0xf9, 0x18, 0xae, 0xcd, 0x5c, 0x17, 0x79, 0xa8, 0x2a, 0x1e, 0x5e, 0x9b, 0x2e, 0xe3, 0xb5,
-	0xa2, 0x15, 0x91, 0xa5, 0x22, 0x33, 0xdf, 0x9b, 0x50, 0x3d, 0xe6, 0x1e, 0xc7, 0xa8, 0x03, 0x0d,
-	0x8f, 0xb1, 0x70, 0x40, 0x64, 0x7e, 0x75, 0xfb, 0xdf, 0xca, 0xde, 0x4a, 0xa5, 0x76, 0x27, 0xd7,
-	0x50, 0xce, 0x15, 0xdf, 0x88, 0x3e, 0x08, 0xf0, 0xa9, 0x97, 0x0c, 0x79, 0xb7, 0xd7, 0x3f, 0xc6,
-	0x5c, 0x17, 0xc2, 0xf4, 0xa1, 0x30, 0x14, 0x0d, 0x93, 0x41, 0x48, 0x24, 0xa4, 0x2e, 0xd2, 0x59,
-	0x43, 0xbd, 0x5c, 0x43, 0x1b, 0x2a, 0xbc, 0x69, 0xde, 0x83, 0xb5, 0x59, 0x4f, 0x2e, 0x53, 0x8f,
-	0xe2, 0xfd, 0xac, 0x81, 0x4b, 0xd5, 0xf3, 0x5f, 0x26, 0xac, 0x66, 0x05, 0xfd, 0x20, 0x24, 0x1c,
-	0x5d, 0x05, 0x33, 0x0c, 0xf4, 0x63, 0x33, 0x0c, 0x44, 0xb1, 0xf9, 0x51, 0xc2, 0xb2, 0x1c, 0x68,
-	0x49, 0x9c, 0x8f, 0xf0, 0x88, 0xc6, 0x13, 0x59, 0x22, 0x96, 0xab, 0x25, 0x61, 0xcb, 0xf7, 0xfc,
-	0x33, 0x2c, 0x7b, 0xd0, 0x72, 0x95, 0x80, 0x0e, 0xa1, 0x81, 0xc9, 0x38, 0x8c, 0xa9, 0x0c, 0xd4,
-	0xae, 0xca, 0x54, 0xdd, 0xce, 0xf9, 0x2c, 0xba, 0xd0, 0x3e, 0xc8, 0x35, 0x75, 0xca, 0x0a, 0x6f,
-	0x05, 0x94, 0x47, 0x08, 0xe5, 0x1e, 0x0f, 0x29, 0x61, 0x76, 0x6d, 0x21, 0x54, 0x27, 0xd7, 0x4c,
-	0x69, 0xce, 0x4f, 0x44, 0xf6, 0x66, 0x6d, 0x5d, 0x36, 0xfb, 0xb3, 0x06, 0x2e, 0x95, 0xfd, 0xcf,
-	0xe1, 0x9a, 0x8b, 0x07, 0x21, 0xe3, 0x38, 0xd6, 0x13, 0x5d, 0xf4, 0xec, 0x18, 0xc7, 0x2c, 0xa4,
-	0x44, 0x43, 0xa4, 0xa2, 0x98, 0x36, 0x24, 0x1f, 0xb4, 0x6a, 0xda, 0x6c, 0x42, 0x6d, 0x8c, 0x49,
-	0x40, 0xe3, 0x94, 0x04, 0x25, 0x39, 0xdf, 0x19, 0xb0, 0xd6, 0xa5, 0xe4, 0x34, 0x1c, 0x24, 0x31,
-	0x4e, 0xa1, 0x77, 0xa1, 0xce, 0x75, 0x6b, 0x4a, 0xec, 0xc6, 0xde, 0x46, 0x59, 0xdb, 0xba, 0x99,
-	0x16, 0xda, 0x81, 0x6b, 0x24, 0x19, 0xb9, 0x98, 0xe1, 0x78, 0x8c, 0x03, 0x39, 0x48, 0xd4, 0xb4,
-	0x98, 0x3d, 0x46, 0xdb, 0x50, 0x65, 0xba, 0x09, 0x04, 0xf0, 0xd5, 0xe9, 0x26, 0x70, 0xd5, 0xa5,
-	0x73, 0x6e, 0xc2, 0x7a, 0xc1, 0x2d, 0x16, 0x51, 0xc2, 0x30, 0xba, 0x0f, 0xf9, 0x08, 0x9c, 0x5b,
-	0xd6, 0x73, 0xea, 0xd9, 0x10, 0xd5, 0x84, 0xe6, 0x6f, 0x73, 0x27, 0xcc, 0x05, 0x4e, 0xa0, 0x47,
-	0xd3, 0xf5, 0xb3, 0x34, 0xb3, 0xd8, 0xe7, 0x0d, 0x2e, 0xae, 0xa1, 0xc7, 0x70, 0x75, 0xda, 0xa3,
-	0x97, 0x5d, 0xef, 0x2f, 0x5b, 0x54, 0x5f, 0xc3, 0xf5, 0x4e, 0x10, 0x64, 0x6d, 0x90, 0xb2, 0x3f,
-	0xdb, 0xd7, 0x2d, 0x58, 0x8a, 0x68, 0xa0, 0x3d, 0xba, 0x52, 0xdc, 0x94, 0xae, 0xb8, 0x40, 0xbb,
-	0x60, 0xf9, 0x29, 0x86, 0x66, 0x15, 0xcd, 0x37, 0x99, 0x9b, 0x2b, 0x39, 0xbf, 0x9b, 0xb0, 0x31,
-	0x6d, 0x59, 0x13, 0x7c, 0x0f, 0xaa, 0x67, 0x61, 0x3e, 0x8a, 0x77, 0x32, 0x98, 0x32, 0xed, 0xb6,
-	0xe8, 0x5b, 0x9d, 0x68, 0xf5, 0x0c, 0x7d, 0x52, 0x2c, 0x10, 0xf5, 0x21, 0x76, 0x67, 0x31, 0xc6,
-	0x3f, 0xa8, 0x91, 0x45, 0x85, 0xda, 0xec, 0x01, 0xe4, 0x6e, 0x94, 0x64, 0xff, 0xce, 0x34, 0xa1,
-	0x9b, 0xe5, 0xd3, 0xa7, 0xc8, 0xea, 0xbf, 0x5d, 0x26, 0xce, 0x0e, 0x6c, 0xba, 0x78, 0x44, 0xc7,
-	0xf8, 0x45, 0x4c, 0x3b, 0x7f, 0x98, 0xf0, 0xca, 0x9c, 0xaa, 0xa6, 0xa6, 0x33, 0x4d, 0x4d, 0xf1,
-	0xfb, 0xb6, 0xf4, 0x41, 0x09, 0x3b, 0x8f, 0xe6, 0xd9, 0xb9, 0xfb, 0x42, 0x98, 0xff, 0x01, 0x41,
-	0xa2, 0x1d, 0xfa, 0x51, 0xe0, 0xf1, 0x3c, 0xfc, 0x83, 0xb1, 0x58, 0x60, 0x17, 0xb6, 0x43, 0x99,
-	0xf6, 0x65, 0xdb, 0xa1, 0x14, 0xe3, 0xbf, 0x9f, 0xed, 0xbd, 0x8f, 0xe1, 0x8a, 0x5a, 0xa5, 0xb1,
-	0x9c, 0x9b, 0xe8, 0x1d, 0xf1, 0xdf, 0x4d, 0xad, 0x56, 0x64, 0x17, 0xca, 0x71, 0x6a, 0xdb, 0x36,
-	0xf3, 0x78, 0xd5, 0xff, 0xcd, 0xca, 0xde, 0x8f, 0x26, 0x58, 0xdd, 0x28, 0x51, 0x1f, 0x55, 0x68,
-	0x5f, 0x7e, 0xee, 0xab, 0x7d, 0x80, 0x5e, 0x2d, 0xdb, 0x11, 0x0a, 0xa7, 0x79, 0xf1, 0xfa, 0x70,
-	0x2a, 0xe8, 0x11, 0x5c, 0x29, 0x4e, 0x29, 0x74, 0xe3, 0x82, 0xe1, 0xa5, 0xb0, 0x6e, 0x2e, 0x1c,
-	0x6d, 0x4e, 0x05, 0x3d, 0x11, 0x5f, 0x0d, 0x53, 0x6d, 0x85, 0x6e, 0x5d, 0xdc, 0x70, 0x0a, 0x74,
-	0xeb, 0x45, 0x1d, 0xe9, 0x54, 0xd0, 0x03, 0xb8, 0x7e, 0x1f, 0xf3, 0xec, 0x46, 0x55, 0x12, 0x43,
-	0x33, 0x39, 0x2a, 0xf8, 0x57, 0x56, 0x6b, 0x4e, 0x65, 0xd7, 0xf8, 0xe8, 0xc6, 0xb3, 0xe7, 0x2d,
-	0xe3, 0x97, 0xe7, 0xad, 0xca, 0x37, 0xe7, 0x2d, 0xe3, 0xd9, 0x79, 0xcb, 0xf8, 0xf9, 0xbc, 0x65,
-	0xfc, 0x7a, 0xde, 0x32, 0xbe, 0xfd, 0xad, 0x55, 0x39, 0xa9, 0xc9, 0x3f, 0xf9, 0x6f, 0xff, 0x1d,
-	0x00, 0x00, 0xff, 0xff, 0x08, 0xe7, 0xa3, 0x8f, 0x29, 0x10, 0x00, 0x00,
+	// 1172 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe4, 0x57, 0x4d, 0x6f, 0xdb, 0x46,
+	0x13, 0x16, 0x69, 0x49, 0x16, 0x47, 0x51, 0x1c, 0x6f, 0x1c, 0x47, 0x11, 0xf2, 0xea, 0x55, 0x89,
+	0xa6, 0x55, 0x8b, 0x44, 0x89, 0xdd, 0x4b, 0x1a, 0xf4, 0x03, 0xb1, 0x6c, 0xc0, 0x46, 0x5d, 0x87,
+	0xa1, 0xaa, 0xa6, 0x97, 0x1e, 0x68, 0x72, 0x2d, 0x13, 0x91, 0xb8, 0x2c, 0x77, 0x29, 0x40, 0xb7,
+	0xfe, 0x84, 0xa2, 0xff, 0xa5, 0xf7, 0x1e, 0x7a, 0xc8, 0xa1, 0x28, 0x7a, 0xec, 0xb1, 0x71, 0xff,
+	0x40, 0xaf, 0x05, 0x7a, 0x28, 0xf6, 0x83, 0x22, 0x29, 0x33, 0x72, 0x8d, 0xf4, 0x96, 0x9b, 0x66,
+	0x77, 0xe6, 0x99, 0xdd, 0x79, 0x9e, 0xd9, 0x11, 0xc1, 0x70, 0x42, 0xbf, 0x17, 0x46, 0x84, 0x11,
+	0x54, 0x9b, 0x6e, 0x79, 0x91, 0x73, 0xc2, 0xb6, 0x5a, 0xf7, 0x46, 0x3e, 0x3b, 0x8d, 0x8f, 0x7b,
+	0x2e, 0x99, 0xdc, 0x1f, 0x91, 0x11, 0xb9, 0x2f, 0x1c, 0x8e, 0xe3, 0x13, 0x61, 0x09, 0x43, 0xfc,
+	0x92, 0x81, 0xe6, 0x2a, 0x54, 0xf6, 0x26, 0x21, 0x9b, 0x99, 0x1d, 0xa8, 0x3d, 0x8d, 0x9d, 0x80,
+	0xf9, 0x6c, 0x86, 0x36, 0xa0, 0xf2, 0xa5, 0x33, 0x8e, 0x71, 0x53, 0xeb, 0x68, 0x5d, 0xc3, 0xae,
+	0x4c, 0xb9, 0x61, 0xfe, 0xa4, 0xc3, 0x86, 0x8d, 0x29, 0x89, 0x23, 0x17, 0xdb, 0xf8, 0x9b, 0xd8,
+	0x8f, 0xf0, 0x04, 0x07, 0x8c, 0xa2, 0x1d, 0xa8, 0x1e, 0xfa, 0x13, 0x9f, 0xd1, 0xa6, 0xd6, 0x59,
+	0xe9, 0xd6, 0xb7, 0xdf, 0xef, 0x25, 0xa7, 0xe9, 0x15, 0xf9, 0xf7, 0xa4, 0xf3, 0x5e, 0xc0, 0xa2,
+	0x99, 0x5d, 0x1d, 0x0b, 0x03, 0xed, 0x43, 0x8d, 0xfb, 0x60, 0xca, 0x68, 0x53, 0x17, 0x28, 0x77,
+	0x2f, 0x40, 0x49, 0xdc, 0x25, 0x4e, 0x2d, 0x52, 0x66, 0xeb, 0x73, 0xa8, 0x67, 0x12, 0xa0, 0x6b,
+	0xb0, 0xf2, 0x1c, 0xcf, 0xd4, 0x4d, 0xf8, 0x4f, 0xd4, 0x05, 0x79, 0xa1, 0xa6, 0xde, 0xd1, 0xba,
+	0xf5, 0x6d, 0x94, 0xe6, 0x49, 0x0a, 0xa0, 0x6e, 0xfc, 0x48, 0x7f, 0xa8, 0xb5, 0x9e, 0x40, 0x23,
+	0x97, 0xe9, 0x75, 0x01, 0xcd, 0xaf, 0x61, 0xd5, 0x22, 0xde, 0x20, 0xc4, 0x2e, 0x7a, 0x1b, 0x1a,
+	0x03, 0xf7, 0x14, 0x7b, 0xf1, 0x18, 0x47, 0x47, 0xce, 0x24, 0xa9, 0x77, 0x83, 0x66, 0x17, 0xd1,
+	0x5d, 0x58, 0xb7, 0x22, 0x9f, 0x44, 0x3e, 0x9b, 0xf5, 0xc7, 0x0e, 0xa5, 0xc2, 0x53, 0x17, 0x9e,
+	0xeb, 0xe1, 0xe2, 0x86, 0xf9, 0xb3, 0x06, 0x2b, 0x16, 0xf1, 0x10, 0x82, 0x72, 0x06, 0xb2, 0x1c,
+	0x70, 0xa4, 0xdb, 0x60, 0xf0, 0x35, 0x1a, 0x3a, 0x6e, 0x82, 0x60, 0x04, 0xc9, 0x02, 0xda, 0x82,
+	0xea, 0xa1, 0x73, 0x8c, 0xc7, 0xb4, 0xb9, 0x22, 0x08, 0xb8, 0x95, 0xde, 0xc3, 0x22, 0x5e, 0x4f,
+	0xee, 0x25, 0xac, 0x09, 0x03, 0xdd, 0x81, 0x32, 0xbf, 0x48, 0xb3, 0x2c, 0x2e, 0xbe, 0x9e, 0x0b,
+	0xe0, 0x1b, 0x76, 0x99, 0x86, 0xd8, 0x6d, 0x7d, 0x08, 0xf5, 0x4c, 0x74, 0x41, 0x05, 0x37, 0xb2,
+	0x15, 0x34, 0xf2, 0xd5, 0x32, 0xfa, 0x24, 0x60, 0x8e, 0x1f, 0xe0, 0xa8, 0xf0, 0x4e, 0x1f, 0x81,
+	0x91, 0xc8, 0x83, 0x2a, 0x02, 0xda, 0xcb, 0x95, 0x63, 0x1b, 0x51, 0x12, 0x60, 0x7e, 0x0c, 0xab,
+	0x7d, 0x6b, 0x78, 0x10, 0x9c, 0x10, 0xd4, 0x82, 0xda, 0x80, 0xb8, 0xcf, 0x31, 0x3b, 0xd8, 0x15,
+	0x09, 0x2a, 0x76, 0x8d, 0x2a, 0x1b, 0x6d, 0x42, 0xb5, 0x4f, 0x22, 0x7c, 0xb0, 0x2b, 0x32, 0x54,
+	0xec, 0xaa, 0x2b, 0x2c, 0xf3, 0x6f, 0x0d, 0xea, 0x7d, 0x6b, 0xf8, 0x05, 0x09, 0xc9, 0x98, 0x8c,
+	0x66, 0xa8, 0x09, 0xab, 0x47, 0xf1, 0xa4, 0x6f, 0x0d, 0xa9, 0x82, 0x58, 0x0d, 0xa4, 0xc9, 0xd1,
+	0xf9, 0x0e, 0x89, 0xd4, 0x29, 0x2b, 0x76, 0x2d, 0x50, 0x36, 0x6a, 0x03, 0x1c, 0xc5, 0x13, 0x99,
+	0x9c, 0x17, 0x9f, 0xef, 0x42, 0x30, 0x5f, 0x41, 0x7b, 0x00, 0x7d, 0x6b, 0xb8, 0x8b, 0x99, 0xe3,
+	0x8f, 0x69, 0xb3, 0x2c, 0xc8, 0xb9, 0x93, 0xde, 0x31, 0x73, 0x80, 0x5e, 0xea, 0x27, 0x89, 0x02,
+	0x77, 0xbe, 0xd0, 0xb2, 0x60, 0x6d, 0x61, 0x3b, 0xcb, 0x44, 0x45, 0x32, 0xf1, 0x6e, 0x5e, 0xcb,
+	0xeb, 0xb9, 0x34, 0xbc, 0x4e, 0x59, 0x72, 0x7e, 0xd0, 0xa1, 0x32, 0x60, 0x0e, 0xc3, 0x68, 0x07,
+	0xea, 0x0e, 0xa5, 0xfe, 0x28, 0x10, 0x15, 0x56, 0xef, 0x40, 0x27, 0x0d, 0x16, 0x5e, 0xbd, 0xc7,
+	0xa9, 0x8b, 0x3c, 0x5e, 0x36, 0x88, 0x77, 0x83, 0x87, 0x4f, 0x9c, 0x78, 0xcc, 0xfa, 0xd6, 0x70,
+	0x80, 0x99, 0x12, 0x43, 0x7e, 0x91, 0x67, 0x0a, 0xc7, 0xf1, 0xc8, 0x0f, 0x04, 0xa4, 0x92, 0xea,
+	0xb9, 0x4c, 0x56, 0xea, 0xa2, 0x32, 0x65, 0x82, 0x5a, 0x9f, 0xc0, 0xb5, 0xc5, 0xa3, 0x5c, 0x46,
+	0x94, 0x3c, 0x7e, 0x31, 0xc1, 0xa5, 0x44, 0x8d, 0xa1, 0x31, 0x17, 0xf5, 0xbe, 0x1f, 0x30, 0x74,
+	0x15, 0x74, 0xdf, 0x53, 0xb1, 0xba, 0xef, 0x71, 0xbd, 0xb9, 0x61, 0x4c, 0xe7, 0x35, 0x50, 0x16,
+	0x5f, 0x9f, 0xe0, 0x09, 0x89, 0x66, 0x42, 0x25, 0x86, 0xad, 0x2c, 0x9e, 0xca, 0x75, 0xdc, 0x53,
+	0x2c, 0x1a, 0xd1, 0xb0, 0xa5, 0x61, 0x3e, 0x83, 0x35, 0x1b, 0x8f, 0x7c, 0xca, 0x70, 0xa4, 0x9e,
+	0x30, 0x2e, 0xd0, 0x29, 0x8e, 0xa8, 0x4f, 0x02, 0x95, 0x2d, 0x31, 0x79, 0x6f, 0x05, 0xe9, 0xc3,
+	0x22, 0x7b, 0x6b, 0x13, 0xaa, 0x53, 0x1c, 0x78, 0x24, 0x4a, 0xd2, 0x49, 0xcb, 0xfc, 0x5e, 0x83,
+	0x2b, 0x03, 0xe6, 0x44, 0x2c, 0x81, 0xdd, 0x82, 0x1a, 0x53, 0x12, 0x14, 0xb8, 0xf5, 0xed, 0x1b,
+	0x85, 0xfa, 0xb4, 0xe7, 0x6e, 0xa8, 0x0b, 0x6b, 0x41, 0x3c, 0xb1, 0x31, 0xc5, 0xd1, 0x14, 0x7b,
+	0xa2, 0x65, 0x64, 0x5f, 0x2c, 0x2e, 0xa3, 0x3b, 0x50, 0xa1, 0x8a, 0x6b, 0x8e, 0xbc, 0xb6, 0xc0,
+	0xb5, 0x2d, 0x77, 0xcd, 0x5f, 0x34, 0x68, 0xa8, 0x43, 0xd1, 0x90, 0x04, 0x14, 0xa3, 0x5d, 0x48,
+	0x3b, 0x5d, 0x49, 0xf2, 0x9d, 0x5c, 0x70, 0xea, 0x3b, 0x7f, 0x28, 0x94, 0x30, 0xd3, 0xc0, 0x34,
+	0xbd, 0xbe, 0x2c, 0x7d, 0xcb, 0x82, 0xab, 0x79, 0x8c, 0xd7, 0x1e, 0x14, 0x33, 0xb8, 0xfe, 0xd8,
+	0xf3, 0xe6, 0x42, 0x49, 0x6a, 0xbd, 0xa8, 0x95, 0xff, 0xc3, 0x4a, 0x48, 0x3c, 0x05, 0xd9, 0xc8,
+	0x3d, 0xc1, 0x36, 0xdf, 0x41, 0x5b, 0x60, 0xb8, 0x09, 0x88, 0xaa, 0xe1, 0xf5, 0x0c, 0x3b, 0x73,
+	0xfc, 0xd4, 0xcb, 0xfc, 0x53, 0x87, 0x8d, 0x7c, 0x6e, 0x55, 0xd2, 0x4f, 0xa1, 0x72, 0xea, 0xa7,
+	0x1d, 0xfe, 0x5e, 0x8a, 0x53, 0xe4, 0xde, 0xe3, 0xe2, 0x56, 0x15, 0x95, 0x71, 0xe8, 0xb3, 0x2c,
+	0x27, 0x72, 0xd0, 0xdf, 0xbb, 0x00, 0xe4, 0x5f, 0x50, 0xb3, 0x54, 0x19, 0xad, 0xa7, 0x00, 0xe9,
+	0x41, 0x0a, 0x68, 0xb9, 0x97, 0xa7, 0xe5, 0x66, 0x41, 0x71, 0x78, 0x7c, 0xf6, 0x05, 0xf8, 0xef,
+	0xd9, 0xee, 0xc2, 0xa6, 0x8d, 0x27, 0x64, 0x8a, 0x2f, 0x22, 0xdc, 0xfc, 0x4b, 0x87, 0x9b, 0xe7,
+	0x5c, 0x15, 0x3f, 0x3b, 0x79, 0x7e, 0x72, 0xff, 0xa1, 0x0a, 0x23, 0x0a, 0x28, 0x3a, 0x3a, 0x4f,
+	0xd1, 0x83, 0x8b, 0x71, 0xde, 0x0c, 0x96, 0x78, 0x63, 0x0c, 0x43, 0xcf, 0x61, 0x69, 0x05, 0xf6,
+	0xa6, 0x38, 0x60, 0x4b, 0x1a, 0xa3, 0xc8, 0xfd, 0xd2, 0x8d, 0x51, 0x08, 0xf2, 0x46, 0x94, 0x7c,
+	0x7b, 0x1f, 0xae, 0xc8, 0x29, 0x16, 0x39, 0x8c, 0x0f, 0xaa, 0x87, 0xfc, 0x4b, 0x41, 0x4e, 0x35,
+	0x74, 0x2b, 0xab, 0xcb, 0xdc, 0xa4, 0x6b, 0x65, 0xee, 0x2c, 0x3f, 0x70, 0x4a, 0xdb, 0x3f, 0xea,
+	0x60, 0xf4, 0xc3, 0x58, 0x8e, 0x6e, 0xf4, 0x48, 0xfc, 0x77, 0x89, 0x18, 0xda, 0x3c, 0x37, 0x13,
+	0x24, 0xc2, 0xcd, 0x57, 0xcc, 0x0a, 0xb3, 0x84, 0x9e, 0xc0, 0x95, 0xec, 0x53, 0x85, 0xfe, 0xf7,
+	0xaa, 0x27, 0x4c, 0x22, 0xb5, 0x97, 0xbf, 0x70, 0x66, 0x09, 0x7d, 0xc5, 0x47, 0x75, 0xae, 0xb1,
+	0x50, 0x67, 0x49, 0xcf, 0x49, 0xd8, 0xb7, 0x2e, 0xec, 0x4a, 0xb3, 0x84, 0x0e, 0xe1, 0xc6, 0x33,
+	0x87, 0xb9, 0xa7, 0xf3, 0x3d, 0x29, 0x25, 0x8a, 0x16, 0x0b, 0x94, 0x3d, 0x65, 0x91, 0xdc, 0xcc,
+	0xd2, 0x03, 0x6d, 0xe7, 0xf6, 0x8b, 0x97, 0x6d, 0xed, 0xb7, 0x97, 0xed, 0xd2, 0xb7, 0x67, 0x6d,
+	0xed, 0xc5, 0x59, 0x5b, 0xfb, 0xf5, 0xac, 0xad, 0xfd, 0x7e, 0xd6, 0xd6, 0xbe, 0xfb, 0xa3, 0x5d,
+	0x3a, 0xae, 0x8a, 0x6f, 0xca, 0x0f, 0xfe, 0x09, 0x00, 0x00, 0xff, 0xff, 0xd5, 0x1e, 0xc5, 0x8f,
+	0x99, 0x0e, 0x00, 0x00,
 }

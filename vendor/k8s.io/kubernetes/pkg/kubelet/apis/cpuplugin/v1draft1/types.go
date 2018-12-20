@@ -14,15 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha
+package v1draft1
 
-const (
-	// Supported version of the API.
-	Version = "v1draft"
-	// Directory where both the CPU Manager registration socket and the
-	// CPU plugin socket is located. Only privileged pods have access to
-	// this path.
-	CpuPluginPath = "/var/lib/kubelet/cpu-plugin"
-	// CPU Manager socket path.
-	CpuManagerSocket = CpuPluginPath + "/cpumgr.sock"
-)
+type ResourceList map[string]*Quantity
+type CPUDetails map[int32]*CPUInfo

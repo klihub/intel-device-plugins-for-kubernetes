@@ -29,7 +29,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 
-	api "k8s.io/kubernetes/pkg/kubelet/apis/cpuplugin/v1alpha"
+	api "k8s.io/kubernetes/pkg/kubelet/apis/cpuplugin/v1draft1"
 )
 
 const (
@@ -128,7 +128,7 @@ func (p *cpuPlugin) SetupAndServe() error {
 }
 
 // Relay configuration request to CPU policy.
-func (p *cpuPlugin) Configure(ctx context.Context, req *api.ConfigureRequest) (*api.ConfigureResponse, error) {
+func (p *cpuPlugin) Start(ctx context.Context, req *api.StartRequest) (*api.StartResponse, error) {
 	topology := CoreCPUTopology(req.Topology)
 	numReservedCPUs := int(req.NumReservedCPUs)
 	p.state = newStubState(req.State)
@@ -141,7 +141,7 @@ func (p *cpuPlugin) Configure(ctx context.Context, req *api.ConfigureRequest) (*
 		return nil, err
 	}
 
-	return &api.ConfigureResponse{
+	return &api.StartResponse{
 		Resources: p.state.ResourceChanges(true),
 		State:     p.state.StateChanges(),
 	}, nil
@@ -180,7 +180,7 @@ func (p *cpuPlugin) RemoveContainer(ctx context.Context, req *api.RemoveContaine
 }
 
 // Start the (unsolicited) container update event loop.
-func (p *cpuPlugin) GetContainerUpdates(emtpy *api.Empty, srv api.CpuPlugin_GetContainerUpdatesServer) error {
+func (p *cpuPlugin) WatchContainerUpdates(emtpy *api.Empty, srv api.CpuPlugin_WatchContainerUpdatesServer) error {
 	log.Info("starting container update event forwarding loop")
 
 	//

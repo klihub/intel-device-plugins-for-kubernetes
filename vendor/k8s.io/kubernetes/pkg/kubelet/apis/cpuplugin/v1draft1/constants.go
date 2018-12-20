@@ -14,7 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha
+package v1draft1
 
-type ResourceList map[string]*Quantity
-type CPUDetails map[int32]*CPUInfo
+const (
+	// Supported version of the API.
+	Version = "v1draft1"
+	// Directory where CPU Manager and plugin sockets are located.
+	CpuPluginPath = "/var/lib/kubelet/cpu-plugin"
+	// CPU Manager socket path.
+	CpuManagerSocket = CpuPluginPath + "/cpumgr.sock"
+)
