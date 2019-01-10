@@ -17,7 +17,6 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
 	"flag"
 	"os"
 	"sync"
@@ -69,7 +68,6 @@ type poolPolicy struct {
 	sync.Mutex
 	topology        *topology.CPUTopology  // CPU topology information
 	numReservedCPUs int                    // kube+system-reserved CPUs
-	isolatedCPUs    cpuset.CPUSet          // isolated CPUs
 	pluginCfg       *pluginConfig          // plugin configuration data
 	cfgPicker       stub.ConfigPicker      // node configuration picker
 	poolCfg         pool.NodeConfig        // CPU pool configuration
@@ -113,16 +111,8 @@ func (p *poolPolicy) Name() string {
 
 // NewPolicy is the 'constructor', called when the policy gets registered with the CPUManager.
 func (p *poolPolicy) NewPolicy(topology *topology.CPUTopology, numReservedCPUs int) error {
-	var kcl stub.KernelCmdline
-
-	isolated, err := kcl.IsolatedCPUSet()
-	if err != nil {
-		return err
-	}
-
 	p.topology = topology
 	p.numReservedCPUs = numReservedCPUs
-	p.isolatedCPUs = isolated
 
 	return nil
 }
@@ -324,11 +314,10 @@ func (p *poolPolicy) createPools() error {
 		return err
 	}
 
-	p.pools, err = pool.NewPoolSet(nil, p.isolatedCPUs, metrics)
+	p.pools, err = pool.NewPoolSet(nil, metrics)
 	if err != nil {
 		return err
 	}
-	p.pools.SetAllocator(TakeByTopology, p.topology)
 
 	return nil
 }
@@ -384,22 +373,6 @@ func getPluginConfig() *pluginConfig {
 func main() {
 	cfg := getPluginConfig()
 	plugin := NewPoolPolicy(cfg)
-
-	sys, err := stub.DiscoverSystemInfo("")
-	if err != nil {
-		fmt.Printf("failed to discover system info: %+v\n", err)
-	} else {
-		fmt.Printf("SystemInfo:\n")
-		for _, pkg := range sys.Packages {
-			fmt.Printf("  package: %+v\n", *pkg)
-		}
-		for _, node := range sys.Nodes {
-			fmt.Printf("  node: %+v\n", *node)
-		}
-		for _, cpu := range sys.Cpus() {
-			fmt.Printf("  cpu: %+v\n", *cpu)
-		}
-	}
 
 	if err := plugin.SetupAndServe(); err != nil {
 		log.Fatal("failed to start pool CPU policy plugin: %s", err.Error())

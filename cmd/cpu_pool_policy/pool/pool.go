@@ -117,19 +117,16 @@ type Pool struct {
 	cfg    *Config       // (requested) configuration
 }
 
-// A CPU allocator function.
-type AllocCPUFunc func(*topology.CPUTopology, cpuset.CPUSet, int) (cpuset.CPUSet, error)
-
 // All pools available for kube on this node.
 type PoolSet struct {
 	pools      map[string]*Pool      // all CPU pools
 	containers map[string]*Container // containers assignments
 	topology   *topology.CPUTopology // CPU topology info
+	sys        *stub.SystemInfo      // system/topology information
 	isolated   cpuset.CPUSet         // isolated CPUs
-	allocfn    AllocCPUFunc          // CPU allocator function
 	free       cpuset.CPUSet         // free CPUs
 	reconcile  bool                  // whether needs reconcilation
-	stats      *statistics.Stat
+	stats      *statistics.Stat      // metrics interface
 }
 
 // our logger instance
@@ -335,12 +332,28 @@ func (p *Pool) String() string {
 }
 
 // Create a new CPU pool set with the given configuration.
-func NewPoolSet(cfg NodeConfig, isolated cpuset.CPUSet, stats *statistics.Stat) (*PoolSet, error) {
+func NewPoolSet(cfg NodeConfig, stats *statistics.Stat) (*PoolSet, error) {
 	log.Info("creating new CPU pool set")
 
-	var ps = &PoolSet{
+	sys, err := stub.DiscoverSystemInfo("")
+	if err != nil {
+		return nil, err
+	}
+
+	kcl, err := stub.GetKernelCmdline()
+	if err != nil {
+		return nil, err
+	}
+	isolated, err := kcl.IsolatedCPUSet()
+	if err != nil {
+		return nil, err
+	}
+
+
+	ps := &PoolSet{
 		pools:      make(map[string]*Pool),
 		containers: make(map[string]*Container),
+		sys:        sys,
 		isolated:   isolated,
 		stats:      stats,
 	}
@@ -367,7 +380,7 @@ func (ps *PoolSet) Verify() error {
 
 // Check the given configuration for obvious errors.
 func (ps *PoolSet) checkConfig(cfg NodeConfig) error {
-	allCPUs := ps.topology.CPUDetails.CPUs().Difference(ps.isolated)
+	allCPUs := ps.sys.OnlineCPUSet().Difference(ps.isolated)
 	numCPUs := allCPUs.Size()
 	leftover := ""
 
@@ -626,7 +639,7 @@ func (ps *PoolSet) claimLeftoverCPUs(pool string) {
 
 // Get the full set of CPUs in the pool set.
 func (ps *PoolSet) getFreeCPUs() {
-	ps.free = ps.topology.CPUDetails.CPUs().Difference(ps.isolated)
+	ps.free = ps.sys.OnlineCPUSet().Difference(ps.isolated)
 	for _, p := range ps.pools {
 		ps.free = ps.free.Difference(p.shared.Union(p.pinned))
 	}
@@ -691,37 +704,9 @@ func (ps *PoolSet) ReconcileConfig() error {
 	return nil
 }
 
-// Set the CPU allocator function, and CPU topology information.
-func (ps *PoolSet) SetAllocator(allocfn AllocCPUFunc, topo *topology.CPUTopology) {
-	ps.allocfn = allocfn
-	ps.topology = topo
-}
-
 // Take up to cnt CPUs from a given CPU set to another.
 func (ps *PoolSet) takeCPUs(from, to *cpuset.CPUSet, cnt int) (cpuset.CPUSet, error) {
-	if from == nil {
-		from = &ps.free
-	}
-
-	if cnt > from.Size() {
-		cnt = from.Size()
-	}
-
-	if cnt == 0 {
-		return cpuset.NewCPUSet(), nil
-	}
-
-	cpus, err := ps.allocfn(ps.topology, *from, cnt)
-	if err != nil {
-		return cpuset.NewCPUSet(), err
-	}
-	*from = from.Difference(cpus)
-
-	if to != nil {
-		*to = to.Union(cpus)
-	}
-
-	return cpus, nil
+	return stub.AllocateCpus(from, cnt)
 }
 
 // Free up to cnt CPUs from a given CPU set to another.
@@ -738,22 +723,12 @@ func (ps *PoolSet) freeCPUs(from, to *cpuset.CPUSet, cnt int) (cpuset.CPUSet, er
 		return cpuset.NewCPUSet(), nil
 	}
 
-	if keep := from.Size() - cnt; keep > 0 {
-		kept, err := ps.allocfn(ps.topology, *from, keep)
-		if err != nil {
-			return cpuset.NewCPUSet(), err
-		}
-		cpus := from.Difference(kept)
-		*to = to.Union(cpus)
-		*from = kept
-
-		return cpus, nil
+	cset, err := stub.ReleaseCpus(from, cnt)
+	if err == nil {
+		*to = to.Union(cset)
 	}
-	cpus := from.Clone()
-	*to = to.Union(cpus)
-	*from = cpuset.NewCPUSet()
 
-	return cpus, nil
+	return cset, err
 }
 
 // Check it the given pool can be allocated CPUs from.
