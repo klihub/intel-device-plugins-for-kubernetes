@@ -132,7 +132,7 @@ func (p *configPicker) WatchConfig(notifyfn ConfigNotifyFunc) error {
 
 	if err := w.Add(filepath.Dir(p.cfgDir)); err != nil {
 		w.Close()
-		return fmt.Errorf("failed to add %s to file watcher: %v", err)
+		return fmt.Errorf("failed to add %s to file watcher: %v", filepath.Dir(p.cfgDir), err)
 	}
 
 	p.stopCh = make(chan struct{})

@@ -136,3 +136,19 @@ func (kcl *KernelCmdline) IsolatedCPUSet() (cpuset.CPUSet, error) {
 	}
 }
 
+var cmdline *KernelCmdline
+
+// Get the kernel command line using the default procfs location.
+func GetKernelCmdline() (*KernelCmdline, error) {
+	if cmdline != nil {
+		return cmdline, nil
+	}
+
+	cmdline = &KernelCmdline{}
+	err := cmdline.Check()
+	if err != nil {
+		cmdline = nil
+	}
+
+	return cmdline, err
+}
