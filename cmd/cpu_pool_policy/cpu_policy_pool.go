@@ -264,7 +264,7 @@ func (p *poolPolicy) configure() error {
 		log.Info("configuration for node %s: %s", p.pluginCfg.NodeName, path)
 	}
 
-	if cfg, err := pool.ParseNodeConfig(p.numReservedCPUs, path); err != nil {
+	if cfg, err := pool.ParseNodeConfig(path, p.numReservedCPUs); err != nil {
 		return err
 	} else {
 		p.poolCfg = cfg

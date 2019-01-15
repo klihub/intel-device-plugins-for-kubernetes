@@ -50,7 +50,9 @@ package pool
 import (
 	"encoding/json"
 	"fmt"
+/*
 	"io/ioutil"
+*/
 	"strings"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
@@ -70,26 +72,18 @@ const (
 	OfflinePool    = "offline"            // CPUs which are offline
 	ReservedPool   = "reserved"           // CPUs reserved for kube and system
 	DefaultPool    = "default"            // CPUs in the default set
+/*
 	wildcardCPU    = "*"                  // wildcard for claiming leftover CPUs
 	claimLeftover  = -1                   // pool size used for '*'
+*/
 )
 
-// CPUFlags has the CPU allocation flags
-type CPUFlags int
-
-const (
-	AllocShared    CPUFlags = 0x00 // allocate to shared set in pool
-	AllocExclusive CPUFlags = 0x01 // allocate exclusively in pool
-	KubePinned     CPUFlags = 0x00 // we take care of CPU pinning
-	WorkloadPinned CPUFlags = 0x02 // workload takes care of CPU pinning
-	DefaultFlags   CPUFlags = AllocShared | KubePinned
-)
-
+/*
 // Node pool configuration in the filesystem.
-type ConfigFile map[string]ConfigFileEntry
+type configFile map[string]configFileEntry
 
 // A single pool entry in the configuration file.
-type ConfigFileEntry struct {
+type configFileEntry struct {
 	CpuCount  int    `json:"cpucount,omitempty"`  // size, if cpus auto-picked
 	Cpus      string `json:"cpus,omitempty"`      // cpus, if explicitly set
 	Isolate   bool   `json:"isolate,omitempty"`   // use isolated CPUs
@@ -106,6 +100,7 @@ type Config struct {
 
 // Node CPU pool configuration.
 type NodeConfig map[string]*Config
+*/
 
 // A container assigned to run in a pool.
 type Container struct {
@@ -138,6 +133,7 @@ type PoolSet struct {
 // our logger instance
 var log = stub.NewLogger(logPrefix)
 
+/*
 // Create default node CPU pool configuration.
 func DefaultNodeConfig(numReservedCPUs int) (NodeConfig, error) {
 	nc := make(NodeConfig)
@@ -154,13 +150,13 @@ func DefaultNodeConfig(numReservedCPUs int) (NodeConfig, error) {
 }
 
 // Parse node CPU pool configuration.
-func ParseNodeConfig(numReservedCPUs int, path string) (NodeConfig, error) {
+func ParseNodeConfig(path string, numReservedCPUs int) (NodeConfig, error) {
 	buf, err := ioutil.ReadFile(path)
 	if err != nil {
 		return NodeConfig{}, fmt.Errorf("failed to parse configuration: %v", err)
 	}
 
-	file := make(ConfigFile)
+	file := make(configFile)
 	if err = json.Unmarshal(buf, &file); err != nil {
 		return NodeConfig{}, fmt.Errorf("failed to parse configuration: %v", err)
 	}
@@ -172,7 +168,7 @@ func ParseNodeConfig(numReservedCPUs int, path string) (NodeConfig, error) {
 		}
 	}
 
-	reservedConfig := ConfigFileEntry{CpuCount: numReservedCPUs}
+	reservedConfig := configFileEntry{CpuCount: numReservedCPUs}
 	if err := nc.setPoolConfig(ReservedPool, reservedConfig); err != nil {
 		return NodeConfig{}, err
 	}
@@ -196,7 +192,7 @@ func (nc NodeConfig) String() string {
 }
 
 // Configure the given pool with the given configuration.
-func (nc NodeConfig) setPoolConfig(pool string, cfg ConfigFileEntry) error {
+func (nc NodeConfig) setPoolConfig(pool string, cfg configFileEntry) error {
 	if cfg.CpuCount != 0 && cfg.Cpus != "" {
 		return configError("pool %s has both size (%d) and cpus (%s) set", pool, cfg.CpuCount, cfg.Cpus)
 	}
@@ -255,7 +251,7 @@ func (nc NodeConfig) claimLeftoverCpus(pool string) error {
 	}
 
 	for wcp, cfg := range nc {
-		if cfg.Size == claimLeftover && wcp != pool {
+		if cfg.CpuCount == claimLeftover && wcp != pool {
 			return configError("multiple wildcard pools: %s, %s", wcp, pool)
 		}
 	}
@@ -282,8 +278,9 @@ func (cfg *Config) String() string {
 		return fmt.Sprintf("<CPU#%s>", cfg.Cpus.String())
 	}
 
-	return fmt.Sprintf("<any %d CPUs>", cfg.Size)
+	return fmt.Sprintf("<any %d CPUs>", cfg.CpuCount)
 }
+*/
 
 // Get the CPU pool, request, and limit of a container.
 func GetContainerPoolResources(p *v1.Pod, c *v1.Container) (string, int64, int64) {
@@ -408,16 +405,16 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 
 	for pool, cfg := range nc {
 		// pool configured either by explicit cpus or by cpu count
-		if cfg.Cpus != nil && cfg.Size != 0 {
-			return configError("pool %s has both size (%d) and cpus (%s) set", pool, cfg.Size, cfg.Cpus)
+		if cfg.Cpus != nil && cfg.CpuCount != 0 {
+			return configError("pool %s has both size (%d) and cpus (%s) set", pool, cfg.CpuCount, cfg.Cpus)
 		} else {
-			if cfg.Cpus == nil && cfg.Size == 0 {
+			if cfg.Cpus == nil && cfg.CpuCount == 0 {
 				return configError("pool %s has neither cpu count nor cpus set", pool)
 			}
 		}
 
 		// max. one pool is configured to claim leftover cpus
-		if cfg.Size == claimLeftover {
+		if cfg.CpuCount == claimLeftover {
 			if leftover != "" {
 				configError("both pools %s and %s want to claim leftover cpus", leftover, pool)
 			}
@@ -445,9 +442,9 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 			}
 		} else {
 			if cfg.Isolate {
-				isolcount += cfg.Size
+				isolcount += cfg.CpuCount
 			} else {
-				cpucount += cfg.Size
+				cpucount += cfg.CpuCount
 			}
 		}
 	}
@@ -466,7 +463,7 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 		if extra == 0 {
 			return configError("pool %s: no leftover cpus to claim", leftover)
 		}
-		nc[leftover].Size = extra
+		nc[leftover].CpuCount = extra
 	} else {
 		def := nc[DefaultPool]
 		if extra == 0 {
@@ -476,7 +473,7 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 		} else {
 			log.Info("pool %s: will claim %d leftover cpus", DefaultPool, extra)
 			if def == nil {
-				nc[DefaultPool] = &Config{Size: extra}
+				nc[DefaultPool] = &Config{CpuCount: extra}
 			}
 		}
 	}
@@ -614,7 +611,7 @@ func (p *Pool) isUptodate() bool {
 	}
 
 	// TODO: should be <= for default, == for all other pools
-	if p.cfg.Size <= p.shared.Union(p.pinned).Size() {
+	if p.cfg.CpuCount <= p.shared.Union(p.pinned).Size() {
 		return true
 	}
 
@@ -695,16 +692,16 @@ func (ps *PoolSet) allocateReservedPool() {
 		r.shared = cset
 	}
 
-	if more := r.cfg.Size - r.shared.Size(); more > 0 {
+	if more := r.cfg.CpuCount - r.shared.Size(); more > 0 {
 		ps.takeCPUs(&ps.free, &r.shared, more)
 	}
 
 	log.Info("pool %s: allocated CPU#%s (%d)", ReservedPool,
 		r.shared.String(), r.shared.Size())
 
-	if r.shared.Size() < r.cfg.Size {
+	if r.shared.Size() < r.cfg.CpuCount {
 		log.Error("pool %s: insufficient cpus %s (need %d)", ReservedPool,
-			r.shared.String(), r.cfg.Size)
+			r.shared.String(), r.cfg.CpuCount)
 	}
 }
 
@@ -740,7 +737,7 @@ func (ps *PoolSet) allocateByCPUCount() {
 			continue
 		}
 
-		cnt := p.cfg.Size - (p.shared.Size() + p.pinned.Size())
+		cnt := p.cfg.CpuCount - (p.shared.Size() + p.pinned.Size())
 		cpus, _ := ps.takeCPUs(&ps.free, &p.shared, cnt)
 
 		log.Info("pool %s: allocated available CPU#%s (%d)", pool,
