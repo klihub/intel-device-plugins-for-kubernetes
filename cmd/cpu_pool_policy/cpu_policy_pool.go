@@ -30,7 +30,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 
 	poolapi "github.com/intel/intel-device-plugins-for-kubernetes/pkg/client/clientset/versioned"
-	// clientkube "k8s.io/client-go/kubernetes"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	utilnode "k8s.io/kubernetes/pkg/util/node"

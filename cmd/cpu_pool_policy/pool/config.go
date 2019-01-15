@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
+	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/stub"
 )
 
 const (
@@ -49,6 +50,29 @@ type Config struct {
 	Cpus      *cpuset.CPUSet `json:"cpus,omitempty"`      // explicit CPUs to allocate, if given
 	Isolate    bool          `json:"isolate,omitempty"`   // use isolated CPUs
 	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
+}
+
+// cached isolated set of CPUs
+var isolated *cpuset.CPUSet
+
+// Get the set of kernel-isolated CPUs.
+func isolatedCPUSet() cpuset.CPUSet {
+	if isolated != nil {
+		return *isolated
+	}
+
+	kcl, err := stub.GetKernelCmdline()
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse kernel command line: %v", err))
+	}
+
+	cset, err := kcl.IsolatedCPUSet()
+	if err != nil {
+		panic(fmt.Sprintf("failed to get isolated cpus: %v", err))
+	}
+
+	isolated = &cset
+	return cset
 }
 
 // Create default CPU pool set configuration.
@@ -171,8 +195,20 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 	default:
 		cset, err := cpuset.Parse(entry.Cpus)
 		if err != nil {
-			return configError("invalid cpuset: %s", pc.Cpus)
+			return configError("pool %s: invalid cpuset: %s", pool, pc.Cpus)
 		}
+
+		// check any isolation inconsistency
+		if pc.Isolate {
+			if !cset.IsSubsetOf(isolatedCPUSet()) {
+				return configError("pool %s: CPUs %s are not isolated", pool, cset.Difference(isolatedCPUSet()))
+			}
+		} else {
+			if !cset.Difference(isolatedCPUSet()).IsEmpty() {
+				return configError("pool %s: CPUs %s are isolated", pool, cset.Difference(isolatedCPUSet()))
+			}
+		}
+
 		pc.Cpus = &cset
 	}
 

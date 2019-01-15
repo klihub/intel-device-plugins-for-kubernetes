@@ -313,7 +313,7 @@ func (c *cores) Classify(idle cpuset.CPUSet) {
 	i := cpuset.NewBuilder()
 	u := cpuset.NewBuilder()
 	f := cpuset.NewBuilder()
-	for _, cpu := range c.sys.cpus {
+	for _, cpu := range c.sys.Cpus {
 		cset := cpu.CPUSet().Difference(c.sys.Offline)
 		switch idle.Intersection(cset).Size() {
 		case cset.Size():
@@ -352,28 +352,28 @@ func (c *cores) Swap(i, j int) {
 }
 
 func (c *cores) Less(i, j int) bool {
-	return c.lessfn(c.sys.cpus[c.pick[i]], c.sys.cpus[c.pick[j]])
+	return c.lessfn(c.sys.Cpus[c.pick[i]], c.sys.Cpus[c.pick[j]])
 }
 
 func (c *cores) Pick(fIdle, fUsed, fFull func (*CpuInfo) bool) []int {
 	c.pick = []int{}
 	if fIdle != nil {
 		for _, id := range c.idle.SortedMembers() {
-			if fIdle(c.sys.cpus[id]) {
+			if fIdle(c.sys.Cpus[id]) {
 				c.pick = append(c.pick, id)
 			}
 		}
 	}
 	if fUsed != nil {
 		for _, id := range c.used.SortedMembers() {
-			if fUsed(c.sys.cpus[id]) {
+			if fUsed(c.sys.Cpus[id]) {
 				c.pick = append(c.pick, id)
 			}
 		}
 	}
 	if fFull != nil {
 		for _, id := range c.full.SortedMembers() {
-			if fFull(c.sys.cpus[id]) {
+			if fFull(c.sys.Cpus[id]) {
 				c.pick = append(c.pick, id)
 			}
 		}
@@ -588,7 +588,7 @@ func (a *allocator) takeCores() {
 
 	took := false
 	for _, id := range cores {
-		core := a.sys.cpus[id]
+		core := a.sys.Cpus[id]
 		cset := core.CPUSet().Difference(a.sys.Offline)
 
 		if cset.Size() > a.cnt {
@@ -615,7 +615,7 @@ func (a *allocator) takeCores() {
 // Allocate idle threads from partially used or fully idle cores as necessary.
 func (a *allocator) takeThreads() {
 	for _, id := range a.cores.used.SortedMembers() {
-		thread := a.sys.cpus[id]
+		thread := a.sys.Cpus[id]
 		cset := a.idle.Intersection(thread.CPUSet().Difference(a.sys.Offline))
 
 		if cset.Size() > a.cnt {
@@ -632,7 +632,7 @@ func (a *allocator) takeThreads() {
 	}
 
 	for _, id := range a.cores.idle.SortedMembers() {
-		core := a.sys.cpus[id]
+		core := a.sys.Cpus[id]
 		cset := a.idle.Intersection(core.CPUSet().Difference(a.sys.Offline))
 
 		if cset.Size() > a.cnt {

@@ -343,21 +343,11 @@ func NewPoolSet(nc NodeConfig, stats *statistics.Stat) (*PoolSet, error) {
 		return nil, err
 	}
 
-	kcl, err := stub.GetKernelCmdline()
-	if err != nil {
-		return nil, err
-	}
-	isolated, err := kcl.IsolatedCPUSet()
-	if err != nil {
-		return nil, err
-	}
-
-
 	ps := &PoolSet{
 		pools:      make(map[string]*Pool),
 		containers: make(map[string]*Container),
 		sys:        sys,
-		isolated:   isolated,
+		isolated:   sys.IsolatedCPUSet(),
 		stats:      stats,
 	}
 
@@ -380,6 +370,76 @@ func (ps *PoolSet) Verify() error {
 
 	return nil
 }
+
+// Get the cpuset of all CPUs and their HT-siblings in the given cpuset.
+func hyperthreadCPUSet(sys *stub.SystemInfo, cset *cpuset.CPUSet) cpuset.CPUSet {
+	b := cpuset.NewBuilder()
+	for _, id := range cset.ToSlice() {
+		b.Add(sys.ThreadSiblingCPUSet(id, true).ToSlice()...)
+	}
+	return b.Result()
+}
+
+// Prepare configuration, check conflicts, collect leftover and offline CPUs.
+func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
+	sys := ps.sys
+
+	isol := ps.isolated
+	free := sys.CPUSet().Difference(isol)
+	//offl := cpuset.NewCPUSet()
+	left := ""
+
+	// Go through all pools and check the following
+	//   - requested CPUs available for pool
+	//   
+
+	for pool, pc := range cfg {
+		if pc.CpuCount == claimLeftover {
+			left = pool
+			continue
+		}
+
+		// check that requested CPUs are available
+		if pc.Isolate {
+			if !pc.Cpus.IsSubsetOf(isol) {
+				return configError("pool %s: isolated cpus %s not available", pool, pc.Cpus.Difference(isol))
+			}
+			isol = isol.Difference(*pc.Cpus)
+		} else {
+			if !pc.Cpus.IsSubsetOf(free) {
+				return configError("pool %s: cpus %s not available", pool, pc.Cpus.Difference(free))
+			}
+			free = free.Difference(*pc.Cpus)
+		}
+
+		// check that there is no offlining conflict
+		if pc.DisableHT {
+			off := hyperthreadCPUSet(sys, pc.Cpus)
+			if !off.IsSubsetOf(free) {
+				return configError("pool %s: CPUs %s cannot be put offline", pool, off.Difference(free))
+			}
+		} else {
+
+		}
+	}
+
+	// claim leftover cpus
+	if left != "" {
+		if free.IsEmpty() {
+			return configError("pool %s: no leftover CPUs to claim", left)
+		}
+	
+		cfg[left].Cpus = &free
+	} 
+
+	return nil
+}
+
+// Check if we can switch to the given configuration given the current set of containers.
+func (ps *PoolSet) isConfigApplicable(cfg NodeConfig) error {
+	return nil
+}
+
 
 // Check the given configuration for obvious errors.
 func (ps *PoolSet) checkConfig(nc NodeConfig) error {

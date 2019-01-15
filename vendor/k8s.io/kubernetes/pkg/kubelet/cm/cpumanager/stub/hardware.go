@@ -39,10 +39,11 @@ const (
 // SystemInfo provides information about the running hardware.
 type SystemInfo struct {
 	Path string                   // sysfs device/system path
-	cpus map[int]*CpuInfo         // CPU core information
+	Cpus map[int]*CpuInfo         // CPU core information
 	Nodes map[int]*NodeInfo       // NUMA node information
 	Packages map[int]*PackageInfo // physical package information
 	Offline cpuset.CPUSet         // offline CPUs
+	Isolated cpuset.CPUSet        // kernel isolated CPUs
 }
 
 // CpuInfo provides details about a single CPU/core.
@@ -63,13 +64,13 @@ type NodeInfo struct {
 	Path string            // sysfs path for this node
 	Id int                 // node id
 	Distance []int         // distance from other nodes
-	cpus []int             // cores in this node
+	Cpus []int             // cores in this node
 }
 
 // PackageInfo provides information about a single physical package.
 type PackageInfo struct {
 	Id int                 // physical package id
-	cpus []int             // cores in this node
+	Cpus []int             // cores in this node
 	Nodes []int            // NUMA nodes, if any
 }
 
@@ -100,10 +101,9 @@ func (s *SystemInfo) Discover(sysfs string) error {
 	}
 
 	s.Path = filepath.Join(sysfs, sysfsSystemPath)
-	s.cpus = make(map[int]*CpuInfo)
+	s.Cpus = make(map[int]*CpuInfo)
 	s.Nodes = make(map[int]*NodeInfo)
 	s.Packages = make(map[int]*PackageInfo)
-	s.Offline = cpuset.NewCPUSet()
 
 	if err := s.DiscoverCpus(); err != nil {
 		return err
@@ -113,6 +113,17 @@ func (s *SystemInfo) Discover(sysfs string) error {
 	}
 	if err := s.DiscoverPackages(); err != nil {
 		return err
+	}
+
+	kcl, err := GetKernelCmdline()
+	if err != nil {
+		return err
+	} else {
+		if cset, err := kcl.IsolatedCPUSet(); err != nil {
+			return err
+		} else {
+			s.Isolated = cset
+		}
 	}
 
 	return nil
@@ -127,6 +138,8 @@ func (s *SystemInfo) DiscoverCpus() error {
 	if entries, err = ioutil.ReadDir(path); err != nil {
 		return err
 	}
+
+	offline := cpuset.NewBuilder()
 	for _, entry := range entries {
 		var name string
 		var id int
@@ -142,12 +155,12 @@ func (s *SystemInfo) DiscoverCpus() error {
 		if err = cpu.Discover(); err != nil {
 			return err
 		}
-		s.cpus[id] = cpu
+		s.Cpus[id] = cpu
 		if !cpu.Online {
-			offslice := append(s.Offline.ToSlice(), id)
-			s.Offline = cpuset.NewCPUSet(offslice...)
+			offline.Add(id)
 		}
 	}
+	s.Offline = offline.Result()
 
 	return nil
 }
@@ -188,13 +201,13 @@ func (s *SystemInfo) DiscoverPackages() error {
 	var cpu *CpuInfo
 	var ok bool
 
-	for _, cpu = range s.cpus {
+	for _, cpu = range s.Cpus {
 		if pkg, ok = s.Packages[cpu.PackageId]; ok {
-			pkg.cpus = append(pkg.cpus, cpu.Id)
+			pkg.Cpus = append(pkg.Cpus, cpu.Id)
 		} else {
 			pkg = &PackageInfo{
 				Id: cpu.PackageId,
-				cpus: []int{cpu.Id},
+				Cpus: []int{cpu.Id},
 				Nodes: []int{},
 			}
 			s.Packages[cpu.PackageId] = pkg
@@ -219,24 +232,24 @@ func (s *SystemInfo) DiscoverPackages() error {
 
 // CpuCount returns the number of CPUs in the system.
 func (s *SystemInfo) CpuCount() int {
-	return len(s.cpus)
+	return len(s.Cpus)
 }
 
 // Cpus returns gathered info for all the CPUs in the system.
-func (s *SystemInfo) Cpus() map[int]*CpuInfo {
-	return s.cpus
+func (s *SystemInfo) CpuMap() map[int]*CpuInfo {
+	return s.Cpus
 }
 
 // CPUSet returns the ids of all CPUs in the system as a CPUSet.
 func (s *SystemInfo) CPUSet() cpuset.CPUSet {
 	b := cpuset.NewBuilder()
-	for id, _ := range s.cpus {
+	for id, _ := range s.Cpus {
 		b.Add(id)
 	}
 	return b.Result()
 }
 
-// OnlineCPUSet returns the the CPUSet of online CPUs.
+// OnlineCPUSet returns the CPUSet of online CPUs.
 func (s *SystemInfo) OnlineCPUSet() cpuset.CPUSet {
 	return s.CPUSet().Difference(s.Offline)
 }
@@ -244,6 +257,11 @@ func (s *SystemInfo) OnlineCPUSet() cpuset.CPUSet {
 // OfflineCPUSet returns the the CPUSet of offline CPUs.
 func (s *SystemInfo) OfflineCPUSet() cpuset.CPUSet {
 	return s.Offline.Clone() // is Clone necessary ?
+}
+
+// IsolatedCPUSet returns the CPUSet of kernel-isolated CPUs.
+func (s *SystemInfo) IsolatedCPUSet() cpuset.CPUSet {
+	return s.Isolated
 }
 
 // PackageCount returns the number of physical packages in the system.
@@ -254,16 +272,25 @@ func (s *SystemInfo) PackageCount() int {
 // PackageCpuCount returns the number of CPUs in the given physical package.
 func (s *SystemInfo) PackageCpuCount(pkg int) int {
 	if pkg, ok := s.Packages[pkg]; ok {
-		return len(pkg.cpus)
+		return len(pkg.Cpus)
 	} else {
 		return 0
 	}
 }
 
+// PackageOnlineCpuCount returns the number of online CPUs in the given package.
+/*
+func (s *SystemInfo) PackageOnlineCpuCount(pkg int) int {
+	if pkg, ok := s.Packages[pkg]; ok {
+		return pkg.OnlineCpuCount()
+	}
+}
+*/
+
 // PackageCpus returns the ids of the CPUs in the given package.
 func (s *SystemInfo) PackageCpus (pkgId int) []int {
 	if pkg, ok := s.Packages[pkgId]; ok {
-		return pkg.cpus
+		return pkg.Cpus
 	} else {
 		return []int{}
 	}
@@ -272,7 +299,7 @@ func (s *SystemInfo) PackageCpus (pkgId int) []int {
 // PackageCPUSet returns the CPUs in the given package as a CPUSet.
 func (s *SystemInfo) PackageCPUSet(pkgId int) cpuset.CPUSet {
 	if pkg, ok := s.Packages[pkgId]; ok {
-		return cpuset.NewCPUSet(pkg.cpus...)
+		return cpuset.NewCPUSet(pkg.Cpus...)
 	} else {
 		return cpuset.NewCPUSet()
 	}
@@ -290,7 +317,7 @@ func (s *SystemInfo) NodeCount() int {
 // NodeCpuCount returns the number of CPUs local to the given node.
 func (s *SystemInfo) NodeCpuCount(node int) int {
 	if node, ok := s.Nodes[node]; ok {
-		return len(node.cpus)
+		return len(node.Cpus)
 	} else {
 		return 0
 	}
@@ -299,7 +326,7 @@ func (s *SystemInfo) NodeCpuCount(node int) int {
 // NodeCpus returns the ids of the CPUs local to the given node.
 func (s *SystemInfo) NodeCpus(nodeId int) []int {
 	if node, ok := s.Nodes[nodeId]; ok {
-		return node.cpus
+		return node.Cpus
 	} else {
 		return []int{}
 	}
@@ -308,9 +335,42 @@ func (s *SystemInfo) NodeCpus(nodeId int) []int {
 // NodeCPUSet returns the CPUs local to the given node as a CPUSet.
 func (s *SystemInfo) NodeCPUSet(nodeId int) cpuset.CPUSet {
 	if node, ok := s.Nodes[nodeId]; ok {
-		return cpuset.NewCPUSet(node.cpus...)
+		return cpuset.NewCPUSet(node.Cpus...)
 	} else {
 		return cpuset.NewCPUSet()
+	}
+}
+
+// ThreadSiblingCPUSet returns the thread sibling CPUSet for the given CPU.
+func (s *SystemInfo) ThreadSiblingCPUSet(cpuId int, excludeCpuId bool) cpuset.CPUSet {
+	if cpu, ok := s.Cpus[cpuId]; !ok {
+		return cpuset.NewCPUSet()
+	} else {
+		tset := cpu.CPUSet()
+		if excludeCpuId {
+			tset = tset.Difference(cpuset.NewCPUSet(cpuId))
+		}
+		return tset
+	}
+}
+
+// Dump SystemInfo details.
+func (s *SystemInfo) Dump() {
+	fmt.Printf("  %d packages:\n", len(s.Packages))
+	for id := 0; id < len(s.Packages); id++ {
+		pkg := s.Packages[id]
+		fmt.Printf("    #%d: %+v\n", id, *pkg)
+	}
+	fmt.Printf("  %d nodes:\n", len(s.Nodes))
+	for id := 0; id < len(s.Nodes); id++ {
+		node := s.Nodes[id]
+		fmt.Printf("    #%d: %+v\n", id, *node)
+	}
+	fmt.Printf("  %d cpus: (%s)\n", len(s.Cpus), s.CPUSet().String())
+	for id := 0; id < len(s.Cpus); id++ {
+		cpu := s.Cpus[id]
+		fmt.Printf("    #%d, pkg %d, node %d: cores: %+v, threads: %+v\n", id,
+			cpu.PackageId, cpu.NodeId, cpu.Cores, cpu.Threads)
 	}
 }
 
@@ -359,7 +419,7 @@ func (node *NodeInfo) Discover() error {
 	if _, err = getSysfsEntry(node.Path, "distance", &node.Distance); err != nil {
 		return err
 	}
-	if _, err = getSysfsEntry(node.Path, "cpulist", &node.cpus); err != nil {
+	if _, err = getSysfsEntry(node.Path, "cpulist", &node.Cpus); err != nil {
 		return err
 	}
 
@@ -368,32 +428,32 @@ func (node *NodeInfo) Discover() error {
 
 // CpuCount returns the number of CPUs in the node.
 func (node *NodeInfo) CpuCount() int {
-	return len(node.cpus)
+	return len(node.Cpus)
 }
 
 // Cpus returns the ids of CPUs in the node.
-func (node *NodeInfo) Cpus() []int {
-	return node.cpus
+func (node *NodeInfo) CpuIds() []int {
+	return node.Cpus
 }
 
 // CPUSet returns the ids of CPUs in the node as a CPUSet.
 func (node *NodeInfo) CPUSet() cpuset.CPUSet {
-	return cpuset.NewCPUSet(node.cpus...)
+	return cpuset.NewCPUSet(node.Cpus...)
 }
 
 // CpuCount returns the number of CPUs in the package.
 func (pkg *PackageInfo) CpuCount() int {
-	return len(pkg.cpus)
+	return len(pkg.Cpus)
 }
 
 // Cpus returns the ids of CPUs in the package.
-func (pkg *PackageInfo) Cpus() []int {
-	return pkg.cpus
+func (pkg *PackageInfo) CpuIds() []int {
+	return pkg.Cpus
 }
 
 // CPUSet returns the ods of CPUs in the package as a CPUSet.
 func (pkg *PackageInfo) CPUSet() cpuset.CPUSet {
-	return cpuset.NewCPUSet(pkg.cpus...)
+	return cpuset.NewCPUSet(pkg.Cpus...)
 }
 
 // CpuCount returns the number of CPU cores.
@@ -402,7 +462,7 @@ func (cpu *CpuInfo) CpuCount() int {
 }
 
 // Cpus returns the ids of all hyperthreads.
-func (cpu *CpuInfo) Cpus() []int {
+func (cpu *CpuInfo) CpuIds() []int {
 	return cpu.Threads
 }
 
@@ -523,19 +583,19 @@ func getSysfsEntry(base, path string, ptr interface{}) (string, error) {
 // fake/mock SystemInfo for testing
 //
 
-func mockPackages(sys *SystemInfo) error {
-	pkgCnt := len(sys.Packages)
-	nodesPerPkg := len(sys.Nodes) / pkgCnt
-	cpusPerPkg := len(sys.cpus) / pkgCnt
+func mockPackages(s *SystemInfo) error {
+	pkgCnt := len(s.Packages)
+	nodesPerPkg := len(s.Nodes) / pkgCnt
+	cpusPerPkg := len(s.Cpus) / pkgCnt
 
-	for id := 0; id < len(sys.Packages); id++ {
-		pkg := sys.Packages[id]
+	for id := 0; id < len(s.Packages); id++ {
+		pkg := s.Packages[id]
 		pkg.Id = id
-		pkg.cpus = make([]int, cpusPerPkg)
+		pkg.Cpus = make([]int, cpusPerPkg)
 		pkg.Nodes = make([]int, nodesPerPkg)
 
 		for i := 0; i < cpusPerPkg; i++ {
-			pkg.cpus[i] = id * cpusPerPkg + i
+			pkg.Cpus[i] = id * cpusPerPkg + i
 		}
 
 		for i := 0; i < nodesPerPkg; i++ {
@@ -562,12 +622,12 @@ func mockSiblingThreads(id, threadsPerCore, threadDiff int) []int {
 	return threads
 }
 
-func mockCpus(sys *SystemInfo, threadsPerCore int) error {
-	pkgCnt := len(sys.Packages)
-	cpusPerPkg := len(sys.cpus) / pkgCnt
+func mockCpus(s *SystemInfo, threadsPerCore int) error {
+	pkgCnt := len(s.Packages)
+	cpusPerPkg := len(s.Cpus) / pkgCnt
 
-	for id := 0; id < len(sys.cpus); id++ {
-		if id != 0 && sys.cpus[id].Id != 0 {
+	for id := 0; id < len(s.Cpus); id++ {
+		if id != 0 && s.Cpus[id].Id != 0 {
 			continue
 		}
 
@@ -578,7 +638,7 @@ func mockCpus(sys *SystemInfo, threadsPerCore int) error {
 		cores := mockSiblingCores(minCore, cpusPerPkg)
 		threads := mockSiblingThreads(id, threadsPerCore, threadDiff)
 		for _, tid := range threads {
-			sys.cpus[tid] = &CpuInfo{
+			s.Cpus[tid] = &CpuInfo{
 				Id: tid,
 				PackageId: pkg,
 				NodeId: -1,
@@ -594,8 +654,8 @@ func mockCpus(sys *SystemInfo, threadsPerCore int) error {
 	return nil
 }
 
-func nodePackage(sys *SystemInfo, n int) int {
-	for _, pkg := range sys.Packages {
+func nodePackage(s *SystemInfo, n int) int {
+	for _, pkg := range s.Packages {
 		for _, node := range pkg.Nodes {
 			if node == n {
 				return pkg.Id
@@ -605,33 +665,33 @@ func nodePackage(sys *SystemInfo, n int) int {
 	return -1
 }
 
-func sameSNC(sys *SystemInfo, n1, n2 int) bool {
-	pkg1 := nodePackage(sys, n1)
-	pkg2 := nodePackage(sys, n2)
+func sameSNC(s *SystemInfo, n1, n2 int) bool {
+	pkg1 := nodePackage(s, n1)
+	pkg2 := nodePackage(s, n2)
 	return pkg1 == pkg2 && pkg1 != -1
 }
 
-func mockNodes(sys *SystemInfo) error {
-	pkgCnt := len(sys.Packages)
-	nodesPerPkg := len(sys.Nodes) / pkgCnt
+func mockNodes(s *SystemInfo) error {
+	pkgCnt := len(s.Packages)
+	nodesPerPkg := len(s.Nodes) / pkgCnt
 
 	i := 0
-	for _, pkg := range sys.Packages {
-		for _, id := range pkg.cpus {
-			cpu := sys.cpus[id]
+	for _, pkg := range s.Packages {
+		for _, id := range pkg.Cpus {
+			cpu := s.Cpus[id]
 			for _, tid := range cpu.Threads {
-				thread := sys.cpus[tid]
+				thread := s.Cpus[tid]
 				nodeId := pkg.Nodes[i % nodesPerPkg]
 				thread.NodeId = nodeId
-				node := sys.Nodes[nodeId]
+				node := s.Nodes[nodeId]
 
 				if node.Distance == nil {
-					node.Distance = make([]int, len(sys.Nodes))
-					for n, _ := range sys.Nodes {
+					node.Distance = make([]int, len(s.Nodes))
+					for n, _ := range s.Nodes {
 						if n == nodeId {
 							node.Distance[n] = 10
 						} else {
-							if sameSNC(sys, n, nodeId) {
+							if sameSNC(s, n, nodeId) {
 								node.Distance[n] = 11
 							} else {
 								node.Distance[n] = 20
@@ -644,10 +704,10 @@ func mockNodes(sys *SystemInfo) error {
 					continue
 				}
 
-				if node.cpus == nil {
-					node.cpus = []int{tid}
+				if node.Cpus == nil {
+					node.Cpus = []int{tid}
 				} else {
-					node.cpus = append(node.cpus, tid)
+					node.Cpus = append(node.Cpus, tid)
 				}
 			}
 			i++
@@ -662,53 +722,53 @@ func mockSystemInfo(pkgCnt, nodesPerPkg, cpusPerPkg, threadsPerCore int, offln s
 		nodesPerPkg = 1
 	}
 
-	sys := &SystemInfo{
+	s := &SystemInfo{
 		Path: "/mock/system/info",
-		cpus: make(map[int]*CpuInfo),
+		Cpus: make(map[int]*CpuInfo),
 		Nodes: make(map[int]*NodeInfo),
 		Packages: make(map[int]*PackageInfo),
 		Offline: cpuset.MustParse(offln),
 	}
 
 	for id := 0; id < pkgCnt; id++ {
-		sys.Packages[id] = &PackageInfo{}
+		s.Packages[id] = &PackageInfo{}
 	}
 
 	for id := 0; id < pkgCnt * cpusPerPkg * threadsPerCore; id++ {
-		sys.cpus[id] = &CpuInfo{ Path: fmt.Sprintf("/mock/cpu%d", id) }
+		s.Cpus[id] = &CpuInfo{ Path: fmt.Sprintf("/mock/cpu%d", id) }
 	}
 
 	for id := 0; id < pkgCnt * nodesPerPkg; id++ {
-		sys.Nodes[id] = &NodeInfo{ Path: fmt.Sprintf("/mock/node%d", id), Id: id }
+		s.Nodes[id] = &NodeInfo{ Path: fmt.Sprintf("/mock/node%d", id), Id: id }
 	}
 
-	if err := mockPackages(sys); err != nil {
+	if err := mockPackages(s); err != nil {
 		return nil, err
 	}
-	if err := mockCpus(sys, threadsPerCore); err != nil {
+	if err := mockCpus(s, threadsPerCore); err != nil {
 		return nil, err
 	}
-	if err := mockNodes(sys); err != nil {
+	if err := mockNodes(s); err != nil {
 		return nil, err
 	}
 
-	dumpSysInfo(sys)
-	sysinfo = sys
+	// s.Dump()
+	sysinfo = s
 	return mockCheckSystemInfo(sysinfo)
 }
 
-func mockCheckSystemInfo(sys *SystemInfo) (*SystemInfo, error) {
+func mockCheckSystemInfo(s *SystemInfo) (*SystemInfo, error) {
 	var err error
 
-	pkgCnt := len(sys.Packages)
-	threadsPerCore := len(sys.cpus[0].Threads)
-	nodesPerPkg := len(sys.Nodes) / pkgCnt
-	cpusPerPkg := len(sys.cpus) / threadsPerCore / pkgCnt
+	pkgCnt := len(s.Packages)
+	threadsPerCore := len(s.Cpus[0].Threads)
+	nodesPerPkg := len(s.Nodes) / pkgCnt
+	cpusPerPkg := len(s.Cpus) / threadsPerCore / pkgCnt
 
 	config := fmt.Sprintf("%d/%d/%d/%d", pkgCnt, nodesPerPkg, cpusPerPkg, threadsPerCore)
-	for _, cpu := range sys.cpus {
+	for _, cpu := range s.Cpus {
 		for _, tid := range cpu.Threads {
-			thread := sys.cpus[tid]
+			thread := s.Cpus[tid]
 			if thread.NodeId == cpu.NodeId {
 				continue
 			}
@@ -737,25 +797,5 @@ func mockCheckSystemInfo(sys *SystemInfo) (*SystemInfo, error) {
 		return nil, err
 	}
 
-	return sys, nil
+	return s, nil
 }
-
-func dumpSysInfo(sys *SystemInfo) {
-	fmt.Printf("  %d packages:\n", len(sys.Packages))
-	for id := 0; id < len(sys.Packages); id++ {
-		pkg := sys.Packages[id]
-		fmt.Printf("    #%d: %+v\n", id, *pkg)
-	}
-	fmt.Printf("  %d nodes:\n", len(sys.Nodes))
-	for id := 0; id < len(sys.Nodes); id++ {
-		node := sys.Nodes[id]
-		fmt.Printf("    #%d: %+v\n", id, *node)
-	}
-	fmt.Printf("  %d cpus: (%s)\n", len(sys.cpus), sys.CPUSet().String())
-	for id := 0; id < len(sys.cpus); id++ {
-		cpu := sys.cpus[id]
-		fmt.Printf("    #%d, pkg %d, node %d: cores: %+v, threads: %+v\n", id,
-			cpu.PackageId, cpu.NodeId, cpu.Cores, cpu.Threads)
-	}
-}
-
