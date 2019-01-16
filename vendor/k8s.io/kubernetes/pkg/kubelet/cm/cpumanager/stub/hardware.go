@@ -341,6 +341,24 @@ func (s *SystemInfo) NodeCPUSet(nodeId int) cpuset.CPUSet {
 	}
 }
 
+// ThreadCpus return the ids of all threads for the given CPU (core).
+func (s *SystemInfo) ThreadCpus(cpuId int) []int {
+	if cpu, ok := s.Cpus[cpuId]; ok {
+		return cpu.Threads
+	} else {
+		return []int{}
+	}
+}
+
+// ThreadCPUSet returns the ids of all threads for the given CPU (core) as a CPUSet.
+func (s *SystemInfo) ThreadCPUSet(cpuId int) cpuset.CPUSet {
+	if cpu, ok := s.Cpus[cpuId]; ok {
+		return cpuset.NewCPUSet(cpu.Threads...)
+	} else {
+		return cpuset.NewCPUSet()
+	}
+}
+
 // ThreadSiblingCPUSet returns the thread sibling CPUSet for the given CPU.
 func (s *SystemInfo) ThreadSiblingCPUSet(cpuId int, excludeCpuId bool) cpuset.CPUSet {
 	if cpu, ok := s.Cpus[cpuId]; !ok {

@@ -36,7 +36,7 @@ type configFile map[string]configFileEntry
 // Entry for a single CPU pool in the configuration file.
 type configFileEntry struct {
 	CpuCount   int           `json:"cpucount,omitempty"`  // CPU count, if CPUs auto-picked
-	Cpus       string        `json:"cpus,omitempty"`      // CPUs, if explicitly set
+	Cpus       string        `json:"cpuset,omitempty"`    // CPUs, if explicitly set
 	Isolate    bool          `json:"isolate,omitempty"`   // use isolated CPUs
 	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
 }
@@ -150,6 +150,10 @@ func (cfg NodeConfig) parseRequireExplicitCpus(file configFile, numReservedCPUs 
 		}
 	}
 
+	if _, ok := cfg[DefaultPool]; !ok {
+		cfg.configure(DefaultPool, configFileEntry{Cpus: wildcardCpu})
+	}
+
 	return nil
 }
 
@@ -204,7 +208,7 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 				return configError("pool %s: CPUs %s are not isolated", pool, cset.Difference(isolatedCPUSet()))
 			}
 		} else {
-			if !cset.Difference(isolatedCPUSet()).IsEmpty() {
+			if !cset.Intersection(isolatedCPUSet()).IsEmpty() {
 				return configError("pool %s: CPUs %s are isolated", pool, cset.Difference(isolatedCPUSet()))
 			}
 		}

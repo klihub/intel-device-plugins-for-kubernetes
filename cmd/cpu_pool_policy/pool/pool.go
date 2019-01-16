@@ -50,9 +50,6 @@ package pool
 import (
 	"encoding/json"
 	"fmt"
-/*
-	"io/ioutil"
-*/
 	"strings"
 
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
@@ -72,35 +69,7 @@ const (
 	OfflinePool    = "offline"            // CPUs which are offline
 	ReservedPool   = "reserved"           // CPUs reserved for kube and system
 	DefaultPool    = "default"            // CPUs in the default set
-/*
-	wildcardCPU    = "*"                  // wildcard for claiming leftover CPUs
-	claimLeftover  = -1                   // pool size used for '*'
-*/
 )
-
-/*
-// Node pool configuration in the filesystem.
-type configFile map[string]configFileEntry
-
-// A single pool entry in the configuration file.
-type configFileEntry struct {
-	CpuCount  int    `json:"cpucount,omitempty"`  // size, if cpus auto-picked
-	Cpus      string `json:"cpus,omitempty"`      // cpus, if explicitly set
-	Isolate   bool   `json:"isolate,omitempty"`   // use isolated CPUs
-	DisableHT bool   `json:"disableHT,omitempty"` // take HT siblings offline
-}
-
-// Runtime configuration for a single CPU pool.
-type Config struct {
-	Size       int           `json:"size"`                // number of CPUs to allocate
-	Cpus      *cpuset.CPUSet `json:"cpus,omitempty"`      // explicit CPUs to allocate, if given
-	Isolate    bool          `json:"isolate,omitempty"`   // use isolated CPUs
-	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
-}
-
-// Node CPU pool configuration.
-type NodeConfig map[string]*Config
-*/
 
 // A container assigned to run in a pool.
 type Container struct {
@@ -121,166 +90,18 @@ type Pool struct {
 // All pools available for kube on this node.
 type PoolSet struct {
 	pools      map[string]*Pool      // all CPU pools
-	containers map[string]*Container // containers assignments
-	topology   *topology.CPUTopology // CPU topology info
+	containers map[string]*Container // container assignments
+	topology   *topology.CPUTopology // CPUManager CPU topology info
 	sys        *stub.SystemInfo      // system/topology information
 	isolated   cpuset.CPUSet         // isolated CPUs
 	free       cpuset.CPUSet         // free CPUs
+	offline    cpuset.CPUSet         // CPUs taken offline
 	reconcile  bool                  // whether needs reconcilation
 	stats      *statistics.Stat      // metrics interface
 }
 
 // our logger instance
 var log = stub.NewLogger(logPrefix)
-
-/*
-// Create default node CPU pool configuration.
-func DefaultNodeConfig(numReservedCPUs int) (NodeConfig, error) {
-	nc := make(NodeConfig)
-
-	if err := nc.setCPUCount(ReservedPool, numReservedCPUs); err != nil {
-		return NodeConfig{}, err
-	}
-
-	if err := nc.claimLeftoverCpus(DefaultPool); err != nil {
-		return NodeConfig{}, err
-	}
-
-	return nc, nil
-}
-
-// Parse node CPU pool configuration.
-func ParseNodeConfig(path string, numReservedCPUs int) (NodeConfig, error) {
-	buf, err := ioutil.ReadFile(path)
-	if err != nil {
-		return NodeConfig{}, fmt.Errorf("failed to parse configuration: %v", err)
-	}
-
-	file := make(configFile)
-	if err = json.Unmarshal(buf, &file); err != nil {
-		return NodeConfig{}, fmt.Errorf("failed to parse configuration: %v", err)
-	}
-
-	nc := make(NodeConfig)
-	for pool, cfg := range file {
-		if err := nc.setPoolConfig(pool, cfg); err != nil {
-			return NodeConfig{}, err
-		}
-	}
-
-	reservedConfig := configFileEntry{CpuCount: numReservedCPUs}
-	if err := nc.setPoolConfig(ReservedPool, reservedConfig); err != nil {
-		return NodeConfig{}, err
-	}
-
-	return nc, nil
-}
-
-// Dump node CPU pool configuration as string.
-func (nc NodeConfig) String() string {
-	if nc == nil {
-		return "{}"
-	}
-
-	str := "{ "
-	for pool, cfg := range nc {
-		str += fmt.Sprintf("%s: %s, ", pool, cfg.String())
-	}
-	str += "}"
-
-	return str
-}
-
-// Configure the given pool with the given configuration.
-func (nc NodeConfig) setPoolConfig(pool string, cfg configFileEntry) error {
-	if cfg.CpuCount != 0 && cfg.Cpus != "" {
-		return configError("pool %s has both size (%d) and cpus (%s) set", pool, cfg.CpuCount, cfg.Cpus)
-	}
-
-	if pool == IgnoredPool || pool == OfflinePool {
-		if cfg.Cpus == "" {
-			return configError("pool %s must be configured with explicit cpus", pool)
-		}
-
-		if cfg.Isolate || cfg.DisableHT {
-			return configError("pool %s can't be isolated or HT-disabled", pool)
-		}
-	}
-
-	c := &Config{
-		Isolate:   cfg.Isolate,
-		DisableHT: cfg.DisableHT,
-		Size:      cfg.CpuCount,
-	}
-	nc[pool] = c
-
-	if cfg.Cpus != "" {
-		if cfg.Cpus != wildcardCPU {
-			cpus, err := cpuset.Parse(cfg.Cpus)
-			if err != nil {
-				return configError("pool %s has invalid cpus (%s)", pool, cfg.Cpus)
-			}
-			c.Cpus = &cpus
-		} else {
-			c.Size = claimLeftover
-		}
-	}
-
-	return nil
-}
-
-// Configure the given pool with a given number of CPUs.
-func (nc NodeConfig) setCPUCount(pool string, cnt int) error {
-	if c, ok := nc[pool]; !ok {
-		nc[pool] = &Config{
-			Size: cnt,
-		}
-	} else {
-		if c.Cpus != nil && c.Cpus.Size() != cnt {
-			return configError("pool %s wants cpus %s but cpu count %d", pool, c.Cpus, cnt)
-		}
-	}
-
-	return nil
-}
-
-// Configure the given pool for claiming any leftover/unused CPUs.
-func (nc NodeConfig) claimLeftoverCpus(pool string) error {
-	if pool == IgnoredPool || pool == OfflinePool {
-		return configError("pool %s cannot be configured with leftover CPUs", pool)
-	}
-
-	for wcp, cfg := range nc {
-		if cfg.CpuCount == claimLeftover && wcp != pool {
-			return configError("multiple wildcard pools: %s, %s", wcp, pool)
-		}
-	}
-
-	nc[pool] = &Config{
-		Size: claimLeftover,
-	}
-
-	return nil
-}
-
-// Create a formatted configuration error.
-func configError(format string, args ...interface{}) error {
-	return fmt.Errorf("configuration error:" + format, args...)
-}
-
-// Dump a configuration as a string.
-func (cfg *Config) String() string {
-	if cfg == nil {
-		return "<to be removed>"
-	}
-
-	if cfg.Cpus != nil {
-		return fmt.Sprintf("<CPU#%s>", cfg.Cpus.String())
-	}
-
-	return fmt.Sprintf("<any %d CPUs>", cfg.CpuCount)
-}
-*/
 
 // Get the CPU pool, request, and limit of a container.
 func GetContainerPoolResources(p *v1.Pod, c *v1.Container) (string, int64, int64) {
@@ -380,24 +201,111 @@ func hyperthreadCPUSet(sys *stub.SystemInfo, cset *cpuset.CPUSet) cpuset.CPUSet 
 	return b.Result()
 }
 
+// Prepare configuration for the reserved pool.
+func (ps *PoolSet) prepareReservedPool(cfg NodeConfig) error {
+	rc, ok := cfg[ReservedPool]
+	if !ok {
+		return configError("pool %s: no configuration for required pool", ReservedPool)
+	}
+
+	if rc.Cpus != nil && !rc.Cpus.IsEmpty() {
+		// check that CPU#0 is in the reserved pool
+		if !rc.Cpus.Contains(0) {
+			return configError("pool %s: cpu #0 must belong to the reserved pool", ReservedPool)
+		}
+	} else {
+		// set up reserved pool to include CPU#0
+		sys  := ps.sys
+		cset := cpuset.NewCPUSet()
+		ncpu := rc.CpuCount
+		for _, id := range sys.CPUSet().ToSlice() {
+			tset := sys.ThreadCPUSet(id).Difference(cset)
+			if ncpu < tset.Size() {
+				cset = cset.Union(cpuset.NewCPUSet(tset.ToSlice()[0:ncpu]...))
+				ncpu = 0
+			} else {
+				cset = cset.Union(tset)
+				ncpu -= tset.Size()
+			}
+
+			if ncpu == 0 {
+				break
+			}
+		}
+
+		if ncpu > 0 {
+			return configError("pool %s: failed to reserve %d CPUs", ReservedPool, ncpu)
+		}
+
+		rc.Cpus = &cset
+		rc.CpuCount = 0
+	}
+
+	return nil
+}
+
+// Save the current configuration of all pools.
+func (ps *PoolSet) backupConfig() map[string]*Config {
+	backup := make(map[string]*Config)
+	for pool, p := range ps.pools {
+		backup[pool] = p.cfg
+	}
+	return backup
+}
+
+// Restore the configuration of all pools.
+func (ps *PoolSet) restoreConfig(backup map[string]*Config) error {
+	// restore existing pools (including ones marked for deletion)
+	for pool, pc := range backup {
+		if p, ok := ps.pools[pool]; !ok {
+			return configError("pool %s: cannot restore configuration, pool not found", pool)
+		} else {
+			p.cfg = pc
+		}
+	}
+
+	// remove newly added pools
+	for pool, _ := range ps.pools {
+		if _, ok := backup[pool]; !ok {
+			delete(ps.pools, pool)
+		}
+	}
+
+	return nil
+}
+
 // Prepare configuration, check conflicts, collect leftover and offline CPUs.
 func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
-	sys := ps.sys
+	// check/set up the reserved pool, making sure it has CPU#0
+	if err := ps.prepareReservedPool(cfg); err != nil {
+		return err
+	}
 
+	sys  := ps.sys
 	isol := ps.isolated
 	free := sys.CPUSet().Difference(isol)
-	//offl := cpuset.NewCPUSet()
-	left := ""
+	offl := cpuset.NewCPUSet()
+	rest := ""
 
-	// Go through all pools and check the following
-	//   - requested CPUs available for pool
-	//   
+	//
+	// Go through all pools checking
+	//   - pool CPUs are available (not taken by other pools)
+	//   - pool CPUs match any potential requested isolation
+	//   - pool CPUs don't conflict with HT-free pools (CPUs to be taken offline)
+	//
 
 	for pool, pc := range cfg {
 		if pc.CpuCount == claimLeftover {
-			left = pool
+			rest = pool
+
+			if _, ok := ps.pools[pool]; !ok {
+				ps.pools[pool] = &Pool{}
+			}
+
 			continue
 		}
+
+		log.Info("checking/preparing pool %s: %s", pool, pc.String())
 
 		// check that requested CPUs are available
 		if pc.Isolate {
@@ -412,31 +320,79 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 			free = free.Difference(*pc.Cpus)
 		}
 
-		// check that there is no offlining conflict
+		// check that there is no HT-free/offlining conflict
 		if pc.DisableHT {
 			off := hyperthreadCPUSet(sys, pc.Cpus)
 			if !off.IsSubsetOf(free) {
 				return configError("pool %s: CPUs %s cannot be put offline", pool, off.Difference(free))
 			}
-		} else {
+			free = free.Difference(off)
+			offl = offl.Union(off)
+		}
 
+		// update pool configuration, create new pool if needed
+		if p, ok := ps.pools[pool]; ok {
+			p.cfg = pc
+		} else {
+			ps.pools[pool] = &Pool{
+				shared: pc.Cpus.Clone(),
+				pinned: cpuset.NewCPUSet(),
+				used:   0,
+				cfg:    pc,
+			}
 		}
 	}
 
+	ps.offline = offl
+
 	// claim leftover cpus
-	if left != "" {
+	if rest != "" {
 		if free.IsEmpty() {
-			return configError("pool %s: no leftover CPUs to claim", left)
+			return configError("pool %s: no leftover CPUs to claim", rest)
 		}
 	
-		cfg[left].Cpus = &free
-	} 
+		cfg[rest].Cpus = &free
+		ps.pools[rest].cfg = cfg[rest]
+	}
+
+	// mark deleted pools for removal
+	for pool, p := range ps.pools {
+		if _, ok := cfg[pool]; ok {
+			continue
+		}
+
+		if p.used != 0 || !p.pinned.IsEmpty() {
+			return configError("pool %s: currently busy, cannot be removed", pool)
+		}
+	}
 
 	return nil
 }
 
-// Check if we can switch to the given configuration given the current set of containers.
-func (ps *PoolSet) isConfigApplicable(cfg NodeConfig) error {
+
+
+// Check if we can switch to the given configuration with the current set of containers.
+func (ps *PoolSet) isApplicableConfig(cfg NodeConfig) error {
+	// check that with the updated configuration existing pools have
+	//   - enough CPU capacity for their containers
+	//   - the right CPUs for their pinned containers
+	for pool, c := range cfg {
+		p, ok := ps.pools[pool]
+		if !ok {
+			continue
+		}
+
+		if !p.pinned.IsSubsetOf(*c.Cpus) {
+			return configError("pool %s: pinned containers need CPUs #%s", pool,
+				p.shared.Difference(*c.Cpus))
+		}
+
+		shCap := int64(c.Cpus.Size() - p.pinned.Size())
+		if 1000 * shCap < p.used {
+			return configError("pool %s: containers need %d mCPU more capacity", pool, p.used - 1000 * shCap)
+		}
+	}
+
 	return nil
 }
 
@@ -466,7 +422,7 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 	for pool, cfg := range nc {
 		// pool configured either by explicit cpus or by cpu count
 		if cfg.Cpus != nil && cfg.CpuCount != 0 {
-			return configError("pool %s has both size (%d) and cpus (%s) set", pool, cfg.CpuCount, cfg.Cpus)
+			return configError("pool %s has both size (%d) and cpus (#%s) set", pool, cfg.CpuCount, cfg.Cpus)
 		} else {
 			if cfg.Cpus == nil && cfg.CpuCount == 0 {
 				return configError("pool %s has neither cpu count nor cpus set", pool)
@@ -486,7 +442,7 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 		if cfg.Cpus != nil {
 			taken := cfg.Cpus.Intersection(explicit)
 			if taken.Size() != 0 {
-				return configError("pool %s: cpus %s also assigned to another pool", pool, taken)
+				return configError("pool %s: cpus #%s also assigned to another pool", pool, taken)
 			}
 			explicit = cfg.Cpus.Union(explicit)
 
@@ -494,7 +450,7 @@ func (ps *PoolSet) checkConfig(nc NodeConfig) error {
 			if cfg.Isolate {
 				missing := cfg.Cpus.Intersection(isolated)
 				if missing.Size() != 0 {
-					return configError("pool %s: of requested cpus %s are not isolated", missing)
+					return configError("pool %s: of requested cpus #%s are not isolated", pool, missing)
 				}
 				isolcount += cfg.Cpus.Size()
 			} else {
@@ -616,25 +572,33 @@ func (ps *PoolSet) isUptodate() bool {
 
 // Reconfigure the CPU pool set.
 func (ps *PoolSet) Reconfigure(nc NodeConfig) error {
+	var err error
+
 	if nc == nil {
 		return nil
 	}
 
-	if err := ps.checkConfig(nc); err != nil {
-		return err
+	// save current configuration
+	effective := ps.backupConfig()
+
+	// update configuration, create new pools, mark deletes ones for removal
+	if err = ps.prepareConfig(nc); err != nil {
+		goto restoreConfig
 	}
 
-	// update pools config, create new ones, mark purged ones for removal
-	ps.updateConfig(nc)
-
-	// trigger reconcilation
-	if err := ps.reconcileConfig(); err != nil {
-		return err
+	// activate the new configuration
+	if err = ps.reconcileConfig(); err != nil {
+		goto restoreConfig
 	}
 
 	// make sure we update pool metrics upon startup
 	ps.updateMetrics()
+
 	return nil
+
+restoreConfig:
+	ps.restoreConfig(effective)
+	return err
 }
 
 // Is pool pinned ?
@@ -835,6 +799,20 @@ func (ps *PoolSet) reconcileConfig() error {
 
 	log.Info("CPU pools not up-to-date, reconciling...")
 
+	for pool, p := range ps.pools {
+		log.Info("reconciling pool %s (pool %+v, cfg: %+v)", pool, *p, *p.cfg)
+		if p.cfg == nil {
+			delete(ps.pools, pool)
+		} else {
+			p.shared = p.cfg.Cpus.Difference(p.pinned)
+		}
+	}
+
+	return nil
+}
+
+/*
+func (ps *PoolSet) foo () {
 	//
 	// Our pool reconcilation algorithm is:
 	//
@@ -876,6 +854,7 @@ func (ps *PoolSet) reconcileConfig() error {
 
 	return nil
 }
+*/
 
 // Take up to cnt CPUs from a given CPU set to another.
 func (ps *PoolSet) takeCPUs(from, to *cpuset.CPUSet, cnt int) (cpuset.CPUSet, error) {
