@@ -233,7 +233,7 @@ func (p *poolPolicy) updateState(s stub.State) error {
 	}
 	s.SetPolicyEntry(poolStateKey, string(poolState))
 
-	// update container CPU assignments
+	// update non-exclusive container CPU assignments
 	assignments := p.pools.GetPoolAssignments(false)
 	for id, cset := range assignments {
 		s.SetCPUSet(id, cset)
