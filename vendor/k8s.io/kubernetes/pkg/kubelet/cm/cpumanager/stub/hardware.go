@@ -259,9 +259,39 @@ func (s *SystemInfo) OfflineCPUSet() cpuset.CPUSet {
 	return s.Offline.Clone() // is Clone necessary ?
 }
 
+// IsolatedCpus returns the ids of kernel-isolated CPUs.
+func (s *SystemInfo) IsolatedCpus() []int {
+	return s.Isolated.ToSlice()
+}
+
 // IsolatedCPUSet returns the CPUSet of kernel-isolated CPUs.
 func (s *SystemInfo) IsolatedCPUSet() cpuset.CPUSet {
 	return s.Isolated
+}
+
+// Set the given CPU online/offline
+func (s *SystemInfo) SetOffline(cpuId int, offline bool) error {
+	if cpu, ok := s.Cpus[cpuId]; !ok {
+		return fmt.Errorf("no CPU #%d", cpuId)
+	} else {
+		f, err := os.OpenFile(filepath.Join(cpu.Path, "online"), os.O_WRONLY, 0)
+		if err != nil {
+			return fmt.Errorf("CPU#%d: can't set online/offline: %v", cpuId, err)
+		}
+
+		setting := []byte{' ', '\n'}
+		if !offline {
+			setting[0] = '1'
+		} else {
+			setting[0] = '0'
+		}
+
+		if _, err = f.Write(setting); err != nil {
+			return fmt.Errorf("CPU#%d: can't set online/offline: %v", cpuId, err)
+		}
+	}
+
+	return nil
 }
 
 // PackageCount returns the number of physical packages in the system.
@@ -277,15 +307,6 @@ func (s *SystemInfo) PackageCpuCount(pkg int) int {
 		return 0
 	}
 }
-
-// PackageOnlineCpuCount returns the number of online CPUs in the given package.
-/*
-func (s *SystemInfo) PackageOnlineCpuCount(pkg int) int {
-	if pkg, ok := s.Packages[pkg]; ok {
-		return pkg.OnlineCpuCount()
-	}
-}
-*/
 
 // PackageCpus returns the ids of the CPUs in the given package.
 func (s *SystemInfo) PackageCpus (pkgId int) []int {

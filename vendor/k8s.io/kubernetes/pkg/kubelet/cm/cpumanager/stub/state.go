@@ -138,7 +138,7 @@ func (s *stubState) SetCPUSet(containerID string, cset cpuset.CPUSet) {
 		}
 	}
 
-        s.assignments[containerID] = cset
+	s.assignments[containerID] = cset
 	s.updatedContainers[containerID] = true
 }
 
