@@ -285,7 +285,7 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 	isol := ps.isolated
 	free := sys.CPUSet().Difference(isol)
 	offl := cpuset.NewCPUSet()
-	rest := ""
+	rest := make(map[bool]string)
 
 	//
 	// Go through all pools checking
@@ -296,7 +296,11 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 
 	for pool, pc := range cfg {
 		if pc.CpuCount == claimLeftover {
-			rest = pool
+			if rest[pc.Isolated] != "" {
+				return configError("pool %s: pool %s also claimed leftover CPUs.", pool, rest[pc.Isolated])
+			}
+
+			rest[pc.Isolated] = pool
 
 			if _, ok := ps.pools[pool]; !ok {
 				ps.pools[pool] = &Pool{}
@@ -305,17 +309,15 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 			continue
 		}
 
-		log.Info("checking/preparing pool %s: %s", pool, pc.String())
-
 		// check that requested CPUs are available
-		if pc.Isolate {
+		if pc.Isolated {
 			if !pc.Cpus.IsSubsetOf(isol) {
-				return configError("pool %s: isolated cpus %s not available", pool, pc.Cpus.Difference(isol))
+				return configError("pool %s: CPUs #%s not isolated/available", pool, pc.Cpus.Difference(isol))
 			}
 			isol = isol.Difference(*pc.Cpus)
 		} else {
 			if !pc.Cpus.IsSubsetOf(free) {
-				return configError("pool %s: cpus %s not available", pool, pc.Cpus.Difference(free))
+				return configError("pool %s: CPUs #%s not available", pool, pc.Cpus.Difference(free))
 			}
 			free = free.Difference(*pc.Cpus)
 		}
@@ -324,7 +326,7 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 		if pc.DisableHT {
 			off := hyperthreadCPUSet(sys, pc.Cpus)
 			if !off.IsSubsetOf(free) {
-				return configError("pool %s: CPUs %s cannot be put offline", pool, off.Difference(free))
+				return configError("pool %s: CPUs #%s cannot be put offline", pool, off.Difference(free))
 			}
 			free = free.Difference(off)
 			offl = offl.Union(off)
@@ -341,18 +343,36 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 				cfg:    pc,
 			}
 		}
+
+		log.Info("prepared pool %s: %s", pool, pc.String())
 	}
 
 	ps.offline = offl
 
 	// claim leftover cpus
-	if rest != "" {
-		if free.IsEmpty() {
-			return configError("pool %s: no leftover CPUs to claim", rest)
+	for _, pool := range rest {
+		if pool == "" {
+			continue
+		}
+
+		pc := cfg[pool]
+		p := ps.pools[pool]
+
+		if pc.Isolated {
+			if isol.IsEmpty() {
+				return configError("pool %s: no leftover isolated CPUs to claim", pool)
+			}
+			pc.Cpus = &isol
+		} else {
+			if free.IsEmpty() {
+				return configError("pool %s: no leftover CPUs to claim", pool)
+			}
+			pc.Cpus = &free
 		}
 	
-		cfg[rest].Cpus = &free
-		ps.pools[rest].cfg = cfg[rest]
+		p.cfg = pc
+
+		log.Info("prepared pool %s: using leftover CPUs #%s", pool, pc.Cpus.String())
 	}
 
 	// mark deleted pools for removal
@@ -367,196 +387,6 @@ func (ps *PoolSet) prepareConfig(cfg NodeConfig) error {
 	}
 
 	return nil
-}
-
-
-
-// Check if we can switch to the given configuration with the current set of containers.
-func (ps *PoolSet) isApplicableConfig(cfg NodeConfig) error {
-	// check that with the updated configuration existing pools have
-	//   - enough CPU capacity for their containers
-	//   - the right CPUs for their pinned containers
-	for pool, c := range cfg {
-		p, ok := ps.pools[pool]
-		if !ok {
-			continue
-		}
-
-		if !p.pinned.IsSubsetOf(*c.Cpus) {
-			return configError("pool %s: pinned containers need CPUs #%s", pool,
-				p.shared.Difference(*c.Cpus))
-		}
-
-		shCap := int64(c.Cpus.Size() - p.pinned.Size())
-		if 1000 * shCap < p.used {
-			return configError("pool %s: containers need %d mCPU more capacity", pool, p.used - 1000 * shCap)
-		}
-	}
-
-	return nil
-}
-
-
-// Check the given configuration for obvious errors.
-func (ps *PoolSet) checkConfig(nc NodeConfig) error {
-	//
-	// Go through all configured pools, checking that
-	//  - each pool is configured either by cpus or by cpu count
-	//  - max. one pool is configured to claim leftover cpus
-	//  - no cpu is explicitly assigned to multiple pools
-	//  - explicit cpus for isolated pools are isolated
-	//  - there are enough cpus for all pools
-	//  - there are enough isolated cpus
-	//
-	// TODO: we should also check for these, but ATM we don't
-	//  - conflicts between explicit cpus and HT-free pools
-	//
-
-	isolated  := ps.isolated
-	regular   := ps.sys.CPUSet().Difference(isolated)
-	explicit  := cpuset.NewCPUSet()
-	cpucount  := 0
-	isolcount := 0
-	leftover := ""
-
-	for pool, cfg := range nc {
-		// pool configured either by explicit cpus or by cpu count
-		if cfg.Cpus != nil && cfg.CpuCount != 0 {
-			return configError("pool %s has both size (%d) and cpus (#%s) set", pool, cfg.CpuCount, cfg.Cpus)
-		} else {
-			if cfg.Cpus == nil && cfg.CpuCount == 0 {
-				return configError("pool %s has neither cpu count nor cpus set", pool)
-			}
-		}
-
-		// max. one pool is configured to claim leftover cpus
-		if cfg.CpuCount == claimLeftover {
-			if leftover != "" {
-				configError("both pools %s and %s want to claim leftover cpus", leftover, pool)
-			}
-			leftover = pool
-			continue
-		}
-
-		// no cpu is explicitly assigned to multiple pools
-		if cfg.Cpus != nil {
-			taken := cfg.Cpus.Intersection(explicit)
-			if taken.Size() != 0 {
-				return configError("pool %s: cpus #%s also assigned to another pool", pool, taken)
-			}
-			explicit = cfg.Cpus.Union(explicit)
-
-			// explicit cpus for isolated pools are isolated
-			if cfg.Isolate {
-				missing := cfg.Cpus.Intersection(isolated)
-				if missing.Size() != 0 {
-					return configError("pool %s: of requested cpus #%s are not isolated", pool, missing)
-				}
-				isolcount += cfg.Cpus.Size()
-			} else {
-				cpucount += cfg.Cpus.Size()
-			}
-		} else {
-			if cfg.Isolate {
-				isolcount += cfg.CpuCount
-			} else {
-				cpucount += cfg.CpuCount
-			}
-		}
-	}
-
-	if cpucount > regular.Size() {
-		return configError("not enough cpus for all pools (%d < %d)", cpucount, regular.Size())
-	}
-
-	if isolcount > isolated.Size() {
-		return configError("not enough isolated cpus (%d > %d)", isolcount, isolated.Size())
-	}
-
-	extra := regular.Size() - cpucount
-
-	if leftover != "" {
-		if extra == 0 {
-			return configError("pool %s: no leftover cpus to claim", leftover)
-		}
-		nc[leftover].CpuCount = extra
-	} else {
-		def := nc[DefaultPool]
-		if extra == 0 {
-			if def == nil {
-				return configError("pool %s: no leftover cpus to claim", DefaultPool)
-			}
-		} else {
-			log.Info("pool %s: will claim %d leftover cpus", DefaultPool, extra)
-			if def == nil {
-				nc[DefaultPool] = &Config{CpuCount: extra}
-			}
-		}
-	}
-
-/*
-	allCPUs := ps.sys.OnlineCPUSet().Difference(ps.isolated)
-	numCPUs := allCPUs.Size()
-	leftover := ""
-
-	for name, c := range nc {
-		if c.Size < 0 {
-			leftover = name
-			continue
-		}
-
-		if c.Size > numCPUs {
-			return fmt.Errorf("not enough CPU (%d) left for pool %s (%d)",
-				numCPUs, name, c.Size)
-		}
-
-		numCPUs -= c.Size
-	}
-
-	if leftover != "" {
-		nc[leftover] = &Config{
-			Size: numCPUs,
-		}
-	} else {
-		if _, ok := cfg[DefaultPool]; !ok {
-			nc[DefaultPool] = &Config{
-				Size: numCPUs,
-			}
-		}
-	}
-*/
-
-	return nil
-}
-
-// Create new pools, update configuration of existing ones, mark purged ones for removal.
-func (ps *PoolSet) updateConfig(nc NodeConfig) {
-	// create new pools, update configuration of existing ones
-	for pool, cfg := range nc {
-		if p, ok := ps.pools[pool]; !ok {
-			ps.pools[pool] = &Pool{
-				shared: cpuset.NewCPUSet(),
-				pinned: cpuset.NewCPUSet(),
-				cfg:    cfg,
-			}
-			log.Info("pool %s: added with configuration %s", pool, cfg.String())
-		} else {
-			p.cfg = cfg
-			log.Info("pool %s: updated configuration: %s", pool, cfg.String())
-		}
-
-	}
-
-	// mark purged pools for removal
-	for pool, p := range ps.pools {
-		if pool == ReservedPool || pool == DefaultPool {
-			continue
-		}
-		if _, ok := nc[pool]; !ok {
-			p.cfg = nil
-			log.Info("pool %s: marked for removal", pool)
-		}
-	}
 }
 
 // Check if the pool set is up to date wrt. the configuration.
@@ -616,177 +446,7 @@ func (p *Pool) isUptodate() bool {
 		return false
 	}
 
-	//
-	// TODO:
-	//   Only an oversized *default* pool should be considered up-to-date.
-	//   Others should be considered up-to-date only for an exact match.
-	//
-	//   Since the pool currently does not know its own name, we cannot
-	//   test for defaultness here, hence the overly permissive check.
-	//   In principle this should not break things (too) badly. For each
-	//   oversized non-default pool there should be at least one undersized
-	//   pool (lacking extra CPUs in the oversized one) which will prevent
-	//   the full PoolSet from becoming up-to-date.
-
-	// TODO: should be IsSubsetOf for default, Equals for other pools
-	if p.cfg.Cpus != nil {
-		return p.cfg.Cpus.IsSubsetOf(p.shared.Union(p.pinned))
-
-	}
-
-	// TODO: should be <= for default, == for all other pools
-	if p.cfg.CpuCount <= p.shared.Union(p.pinned).Size() {
-		return true
-	}
-
-	return false
-}
-
-// Calculate the shrinkable capacity of a pool.
-func (ps *PoolSet) freeCapacity(pool string) int {
-	p, ok := ps.pools[pool]
-	if ok {
-		return 1000*p.shared.Size() - int(p.used)
-	}
-	return 0
-}
-
-// Is the given pool marked for removal ?
-func (ps *PoolSet) isRemoved(pool string) bool {
-	p, ok := ps.pools[pool]
-	if !ok {
-		return false
-	}
-	return p.cfg == nil
-}
-
-// Is the given pool idle ?
-func (ps *PoolSet) isIdle(pool string) bool {
-	p, ok := ps.pools[pool]
-	if !ok {
-		return false
-	}
-	return p.used == 0 && p.pinned.IsEmpty()
-}
-
-// Remove the given (assumed to be idle) pool.
-func (ps *PoolSet) removePool(pool string) {
-	if p, ok := ps.pools[pool]; ok {
-		ps.free = ps.free.Union(p.shared)
-		delete(ps.pools, pool)
-	}
-}
-
-// Shrink a pool to its minimum possible size.
-func (ps *PoolSet) trimPool(pool string) bool {
-	free := ps.freeCapacity(pool) / 1000
-	if free < 1 {
-		return false
-	}
-
-	p, _ := ps.pools[pool]
-	if _, err := ps.freeCPUs(&p.shared, &ps.free, free); err != nil {
-		log.Warning("failed to shrink pool %s by %d CPUs", pool, free)
-		return false
-	}
-
-	log.Info("pool %s: trimmed by %d CPUs", pool, free)
-
-	return true
-}
-
-// Trim pools, also removing unused idle ones.
-func (ps *PoolSet) trimPools() {
-	for pool := range ps.pools {
-		if ps.isRemoved(pool) && ps.isIdle(pool) {
-			ps.removePool(pool)
-		} else {
-			ps.trimPool(pool)
-		}
-	}
-}
-
-// Allocate reserved pool.
-func (ps *PoolSet) allocateReservedPool() {
-	r := ps.pools[ReservedPool]
-
-	if r.cfg.Cpus != nil && !r.cfg.Cpus.Intersection(ps.free).IsEmpty() {
-		cset := r.cfg.Cpus.Intersection(ps.free)
-		ps.free = ps.free.Difference(cset).Union(r.shared)
-		r.shared = cset
-	}
-
-	if more := r.cfg.CpuCount - r.shared.Size(); more > 0 {
-		ps.takeCPUs(&ps.free, &r.shared, more)
-	}
-
-	log.Info("pool %s: allocated CPU#%s (%d)", ReservedPool,
-		r.shared.String(), r.shared.Size())
-
-	if r.shared.Size() < r.cfg.CpuCount {
-		log.Error("pool %s: insufficient cpus %s (need %d)", ReservedPool,
-			r.shared.String(), r.cfg.CpuCount)
-	}
-}
-
-// Allocate pools specified by explicit CPU ids.
-func (ps *PoolSet) allocateByCPUId() {
-	for pool, p := range ps.pools {
-		if ps.isRemoved(pool) {
-			continue
-		}
-
-		if !p.isPinned() || p.isUptodate() {
-			continue
-		}
-
-		if cpus := p.cfg.Cpus.Intersection(ps.free); !cpus.IsEmpty() {
-			p.shared = p.shared.Union(cpus)
-			ps.free = ps.free.Difference(cpus)
-
-			log.Info("pool %s: allocated requested CPU#%s (%d)", pool,
-				cpus.String(), cpus.Size())
-		}
-	}
-}
-
-// Allocate pools specified by size.
-func (ps *PoolSet) allocateByCPUCount() {
-	for pool, p := range ps.pools {
-		if ps.isRemoved(pool) {
-			continue
-		}
-
-		if p.isPinned() || p.isUptodate() {
-			continue
-		}
-
-		cnt := p.cfg.CpuCount - (p.shared.Size() + p.pinned.Size())
-		cpus, _ := ps.takeCPUs(&ps.free, &p.shared, cnt)
-
-		log.Info("pool %s: allocated available CPU#%s (%d)", pool,
-			cpus.String(), cpus.Size())
-	}
-}
-
-// Allocate any remaining unused CPUs to the given pool.
-func (ps *PoolSet) claimLeftoverCPUs(pool string) {
-	p, ok := ps.pools[pool]
-	if !ok || ps.free.IsEmpty() {
-		return
-	}
-	p.shared = p.shared.Union(ps.free)
-	log.Info("pool %s: claimed leftover CPU#%s (%d)", pool,
-		ps.free.String(), ps.free.Size())
-	ps.free = cpuset.NewCPUSet()
-}
-
-// Get the full set of CPUs in the pool set.
-func (ps *PoolSet) getFreeCPUs() {
-	ps.free = ps.sys.CPUSet().Difference(ps.isolated)
-	for _, p := range ps.pools {
-		ps.free = ps.free.Difference(p.shared.Union(p.pinned))
-	}
+	return p.cfg.Cpus.Equals(p.shared.Union(p.pinned))
 }
 
 // Run one round of reconcilation of the CPU pool set configuration.
@@ -810,51 +470,6 @@ func (ps *PoolSet) reconcileConfig() error {
 
 	return nil
 }
-
-/*
-func (ps *PoolSet) foo () {
-	//
-	// Our pool reconcilation algorithm is:
-	//
-	//   1. update list of free CPUs
-	//   2. trim pools (removing unused idle ones)
-	//   3. allocate the reserved pool
-	//   4. allocate pools configured with specific CPUs
-	//   5. allocate pools configured by total CPU count
-	//   6. slam any remaining CPUs to the default pool
-	//
-	// Check the pool allocations vs. configuration and if
-	// everything adds up, mark the pool set as reconciled.
-	// Update pool metrics at the same time.
-	//
-
-	ps.getFreeCPUs()
-
-	ps.trimPools()
-	ps.allocateReservedPool()
-	ps.allocateByCPUId()
-	ps.allocateByCPUCount()
-	ps.claimLeftoverCPUs(DefaultPool)
-
-	ps.reconcile = false
-	for pool, p := range ps.pools {
-		ps.updatePoolMetrics(pool)
-		if !p.isUptodate() {
-			ps.reconcile = true
-		}
-
-		log.Info("pool %s: %s", pool, p.String())
-	}
-
-	if !ps.reconcile {
-		log.Info("CPU pools are now up-to-date")
-	} else {
-		log.Info("CPU pools need further reconcilation...")
-	}
-
-	return nil
-}
-*/
 
 // Take up to cnt CPUs from a given CPU set to another.
 func (ps *PoolSet) takeCPUs(from, to *cpuset.CPUSet, cnt int) (cpuset.CPUSet, error) {

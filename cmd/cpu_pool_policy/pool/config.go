@@ -37,7 +37,7 @@ type configFile map[string]configFileEntry
 type configFileEntry struct {
 	CpuCount   int           `json:"cpucount,omitempty"`  // CPU count, if CPUs auto-picked
 	Cpus       string        `json:"cpuset,omitempty"`    // CPUs, if explicitly set
-	Isolate    bool          `json:"isolate,omitempty"`   // use isolated CPUs
+	Isolated   bool          `json:"isolated,omitempty"`  // use isolated CPUs
 	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
 }
 
@@ -48,7 +48,7 @@ type NodeConfig map[string]*Config
 type Config struct {
 	CpuCount   int           `json:"size"`                // CPU count to allocate
 	Cpus      *cpuset.CPUSet `json:"cpus,omitempty"`      // explicit CPUs to allocate, if given
-	Isolate    bool          `json:"isolate,omitempty"`   // use isolated CPUs
+	Isolated   bool          `json:"isolated,omitempty"`  // use isolated CPUs
 	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
 }
 
@@ -98,7 +98,7 @@ func ParseNodeConfig(path string, numReservedCPUs int) (NodeConfig, error) {
 	}
 	
 	cfg := make(NodeConfig)
-	if err = cfg.parseRequireExplicitCpus(file, numReservedCPUs); err != nil {
+	if err = cfg.parseRequiringExplicitCpus(file, numReservedCPUs); err != nil {
 		return NodeConfig{}, err
 	}
 
@@ -123,25 +123,25 @@ func (cfg NodeConfig) String() string {
 }
 
 // Parse the configuration file, requiring explicit cpusets (Cpus) for pools.
-func (cfg NodeConfig) parseRequireExplicitCpus(file configFile, numReservedCPUs int) error {
+func (cfg NodeConfig) parseRequiringExplicitCpus(file configFile, numReservedCPUs int) error {
 	cfg.configure(ReservedPool, configFileEntry{CpuCount: numReservedCPUs})
 
 	for pool, entry := range file {
 		if entry.Cpus == "" {
 			if pool != ReservedPool {
-				return configError("pool %s must be configured by explicit cpuset", pool)
+				return configError("pool %s: must be configured by explicit cpuset", pool)
 			}
 		}
 
-		if entry.Isolate {
+		if entry.Isolated {
 			if pool == ReservedPool || pool == DefaultPool {
-				return configError("pool %s can't use isolated cpus", pool)
+				return configError("pool %s: can't use isolated cpus", pool)
 			}
 		}
 
 		if entry.DisableHT {
 			if pool == ReservedPool || pool == DefaultPool {
-				return configError("pool %s cannot have HT-disabled cpus", pool)
+				return configError("pool %s: cannot have HT-disabled cpus", pool)
 			}
 		}
 
@@ -158,17 +158,17 @@ func (cfg NodeConfig) parseRequireExplicitCpus(file configFile, numReservedCPUs 
 }
 
 // Parse the configuration file, allowing pools to be configured by CpuCount.
-func (cfg NodeConfig) parseAllowCpuCount(file configFile, numReservedCPUs int) error {
+func (cfg NodeConfig) parseAllowingCpuCount(file configFile, numReservedCPUs int) error {
 	for pool, entry := range file {
-		if entry.Isolate {
+		if entry.Isolated {
 			if pool == ReservedPool || pool == DefaultPool {
-				return configError("pool %s can't use isolated cpus", pool)
+				return configError("pool %s: can't use isolated cpus", pool)
 			}
 		}
 
 		if entry.DisableHT {
 			if pool == ReservedPool || pool == DefaultPool {
-				return configError("pool %s cannot have HT-disabled cpus", pool)
+				return configError("pool %s: cannot have HT-disabled cpus", pool)
 			}
 		}
 
@@ -188,14 +188,19 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 		pc = cfg[pool]
 	}
 
-	pc.Isolate = entry.Isolate
+	pc.Isolated = entry.Isolated
 	pc.DisableHT = entry.DisableHT
 
 	switch entry.Cpus {
 	case "":
 		pc.CpuCount = entry.CpuCount
+
 	case wildcardCpu:
 		pc.CpuCount = claimLeftover
+		if pc.DisableHT {
+			return configError("pool %s: pool claiming leftover CPUs can't be HT-free.", pool)
+		}
+
 	default:
 		cset, err := cpuset.Parse(entry.Cpus)
 		if err != nil {
@@ -203,13 +208,13 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 		}
 
 		// check any isolation inconsistency
-		if pc.Isolate {
+		if pc.Isolated {
 			if !cset.IsSubsetOf(isolatedCPUSet()) {
-				return configError("pool %s: CPUs %s are not isolated", pool, cset.Difference(isolatedCPUSet()))
+				return configError("pool %s: CPUs #%s are not isolated", pool, cset.Difference(isolatedCPUSet()))
 			}
 		} else {
 			if !cset.Intersection(isolatedCPUSet()).IsEmpty() {
-				return configError("pool %s: CPUs %s are isolated", pool, cset.Difference(isolatedCPUSet()))
+				return configError("pool %s: CPUs #%s are isolated", pool, cset.Difference(isolatedCPUSet()))
 			}
 		}
 
@@ -219,14 +224,14 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 	return nil
 }
 
-// Dump pool configuration as a string.
+// Return pool configuration as a string.
 func (cfg *Config) String() string {
 	if cfg == nil {
 		return "<marked for removal>"
 	}
-	
+
 	isolation := ""
-	if cfg.Isolate {
+	if cfg.Isolated {
 		isolation = "isolated "
 	}
 
@@ -237,7 +242,7 @@ func (cfg *Config) String() string {
 
 	cpus := ""
 	if cfg.Cpus != nil {
-		cpus = fmt.Sprintf("CPUs %s", cfg.Cpus.String())
+		cpus = fmt.Sprintf("CPUs #%s", cfg.Cpus.String())
 	} else {
 		if cfg.CpuCount != claimLeftover {
 			cpus = fmt.Sprintf("any %d CPUs", cfg.CpuCount)
@@ -249,7 +254,7 @@ func (cfg *Config) String() string {
 	return "<" + isolation + cpus + htconfig + ">"
 }
 
-// Format an error message for reading/parsing a configuation file.
+// Format an error message related to configuration.
 func configError(format string, args ...interface{}) error {
 	return fmt.Errorf("invalid configuration: " + format, args...)
 }
