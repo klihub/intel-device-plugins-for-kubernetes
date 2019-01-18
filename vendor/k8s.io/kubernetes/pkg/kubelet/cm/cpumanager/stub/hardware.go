@@ -19,6 +19,7 @@ package stub
 import (
 	"fmt"
 	"os"
+	"time"
 	"path/filepath"
 	"strings"
 	"strconv"
@@ -108,6 +109,13 @@ func (s *SystemInfo) Discover(sysfs string) error {
 	if err := s.DiscoverCpus(); err != nil {
 		return err
 	}
+
+	if !s.Offline.IsEmpty() {
+		if err := s.DiscoverOfflineCpus(); err != nil {
+			return err
+		}
+	}
+
 	if err := s.DiscoverNodes(); err != nil {
 		return err
 	}
@@ -158,9 +166,43 @@ func (s *SystemInfo) DiscoverCpus() error {
 		s.Cpus[id] = cpu
 		if !cpu.Online {
 			offline.Add(id)
+			s.SetOffline(id, false)
 		}
 	}
 	s.Offline = offline.Result()
+
+	return nil
+}
+
+// Discover (topology information) for offlined CPUS.
+func (s *SystemInfo) DiscoverOfflineCpus() error {
+	fmt.Printf("*** discovering offlined CPUs #%s...\n", s.Offline)
+	for _, id := range s.Offline.ToSlice() {
+		fmt.Printf("setting CPU#%d temporarily online...\n", id)
+		s.SetOffline(id, false)
+	}
+
+	retries := 10
+	for {
+		done := true
+		for _, id := range s.Offline.ToSlice() {
+			s.Cpus[id].Discover()
+			if !s.Cpus[id].Online {
+				done = false
+			}
+		}
+		if done || retries == 0 {
+			break
+		}
+		fmt.Printf("Waiting for offline CPUs#%s to come online...\n", s.Offline)
+		time.Sleep(100 * time.Millisecond)
+		retries -= 1
+	}
+
+	for _, id := range s.Offline.ToSlice() {
+		fmt.Printf("setting CPU#%d  offline again...\n", id)
+		s.SetOffline(id, true)
+	}
 
 	return nil
 }
@@ -429,6 +471,12 @@ func (cpu *CpuInfo) Discover() error {
 	} else {
 		cpu.NodeId = -1
 	}
+	if _, err = getSysfsEntry(cpu.Path, "online", &cpu.Online); err != nil {
+		cpu.Online = true
+	}
+	if !cpu.Online {
+		return nil
+	}
 	if _, err = getSysfsEntry(cpu.Path, "topology/physical_package_id", &cpu.PackageId); err != nil {
 		return err
 	}
@@ -443,9 +491,6 @@ func (cpu *CpuInfo) Discover() error {
 	}
 	if _, err = getSysfsEntry(cpu.Path, "cpufreq/cpuinfo_max_freq", &cpu.MaxFreq); err != nil {
 		cpu.MaxFreq = 0
-	}
-	if _, err = getSysfsEntry(cpu.Path, "online", &cpu.Online); err != nil {
-		cpu.Online = true
 	}
 
 	return nil
