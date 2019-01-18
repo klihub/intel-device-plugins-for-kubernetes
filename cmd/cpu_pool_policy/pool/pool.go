@@ -329,8 +329,11 @@ func (ps *PoolSet) prepareConfig(ncfg NodeConfig) error {
 			if !siblings.IsSubsetOf(available) && !siblings.IsSubsetOf(offlined) {
 				return configError("pool %s: some of CPUs #%s cannot be put offline", pool, siblings)
 			}
+
+			log.Info("available: %s, siblings: %s, offlined: %s", available, siblings, offlined)
 			available = available.Difference(siblings)
 			offlined = offlined.Union(siblings)
+			log.Info("available: %s, offlined: %s", available, offlined)
 		}
 
 		// update pool configuration, create new pool if needed
@@ -414,7 +417,7 @@ func (ps *PoolSet) reconcileConfig() error {
 			shared := p.cfg.Cpus.Difference(p.pinned)
 			if !p.shared.Equals(shared) {
 				log.Info("reconcile pool %s: updating shared CPUs to #%s...",
-					pool, shared.String)
+					pool, shared.String())
 				p.shared = shared
 			}
 		}
@@ -423,7 +426,11 @@ func (ps *PoolSet) reconcileConfig() error {
 	// reallocate containers
 	ps.updateAllocations()
 
+	// update metrics
 	ps.updateMetrics()
+
+	// update CPU/HW configuration
+	ps.updateHwConfiguration()
 
 	ps.currentCfg = ps.pendingCfg
 	ps.pendingCfg = nil
@@ -456,6 +463,23 @@ func (ps *PoolSet) updateAllocations() error {
 				return fmt.Errorf("pool %s: failed to reallocate container %s",
 					c.pool, id)
 			}
+		}
+	}
+
+	return nil
+}
+
+// Update hardware (CPU online/offline, clock frequency) configuration.
+func (ps *PoolSet) updateHwConfiguration() error {
+	for _, id := range ps.sys.CPUSet().ToSlice() {
+		offline := ps.offlined.Contains(id)
+		if offline {
+			log.Info("setting CPU#%d offline...", id)
+		} else {
+			log.Info("setting CPU#%d online...", id)
+		}
+		if err := ps.sys.SetOffline(id, offline); err != nil {
+			log.Warning("%s", err)
 		}
 	}
 
