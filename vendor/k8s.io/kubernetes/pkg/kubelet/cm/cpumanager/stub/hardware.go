@@ -19,7 +19,6 @@ package stub
 import (
 	"fmt"
 	"os"
-	"time"
 	"path/filepath"
 	"strings"
 	"strconv"
@@ -110,12 +109,6 @@ func (s *SystemInfo) Discover(sysfs string) error {
 		return err
 	}
 
-	if !s.Offline.IsEmpty() {
-		if err := s.DiscoverOfflineCpus(); err != nil {
-			return err
-		}
-	}
-
 	if err := s.DiscoverNodes(); err != nil {
 		return err
 	}
@@ -137,17 +130,56 @@ func (s *SystemInfo) Discover(sysfs string) error {
 	return nil
 }
 
+// Set the state of all or a specified set of CPUs to a desired state.
+func (s *SystemInfo) setCPUSetState(state bool, cset *cpuset.CPUSet) (cpuset.CPUSet, error) {
+	path := filepath.Join(s.Path, "cpu")
+
+	cpus, err := ioutil.ReadDir(path)
+	if err != nil {
+		return cpuset.NewCPUSet(), err
+	}
+
+	changed := cpuset.NewBuilder()
+	for _, cpu := range cpus {
+		var online bool
+
+		id := getCpuId(cpu.Name())
+		if id < 0 {
+			continue
+		}
+
+		if cset != nil && !cset.Contains(id) {
+			continue
+		}
+
+		_, err := writeSysfsEntry(filepath.Join(path, cpu.Name()), "online", state, &online)
+		if err != nil {
+			return cpuset.NewCPUSet(), err
+		}
+
+		if online != state {
+			changed.Add(id)
+		}
+	}
+	
+	return changed.Result(), nil
+}
+
 // DiscoverCpus discovers CPU hardware/topology information from sysfs.
 func (s *SystemInfo) DiscoverCpus() error {
 	var entries []os.FileInfo
 	var err error
+
+	offline, err := s.setCPUSetState(true, nil)
+	if err != nil {
+		return nil
+	}
 
 	path := filepath.Join(s.Path, "cpu")
 	if entries, err = ioutil.ReadDir(path); err != nil {
 		return err
 	}
 
-	offline := cpuset.NewBuilder()
 	for _, entry := range entries {
 		var name string
 		var id int
@@ -164,47 +196,12 @@ func (s *SystemInfo) DiscoverCpus() error {
 			return err
 		}
 		s.Cpus[id] = cpu
-		if !cpu.Online {
-			offline.Add(id)
-			s.SetOffline(id, false)
-		}
 	}
-	s.Offline = offline.Result()
+	s.Offline = offline
 
-	return nil
-}
+	_, err = s.setCPUSetState(false, &offline)
 
-// Discover (topology information) for offlined CPUS.
-func (s *SystemInfo) DiscoverOfflineCpus() error {
-	fmt.Printf("*** discovering offlined CPUs #%s...\n", s.Offline)
-	for _, id := range s.Offline.ToSlice() {
-		fmt.Printf("setting CPU#%d temporarily online...\n", id)
-		s.SetOffline(id, false)
-	}
-
-	retries := 10
-	for {
-		done := true
-		for _, id := range s.Offline.ToSlice() {
-			s.Cpus[id].Discover()
-			if !s.Cpus[id].Online {
-				done = false
-			}
-		}
-		if done || retries == 0 {
-			break
-		}
-		fmt.Printf("Waiting for offline CPUs#%s to come online...\n", s.Offline)
-		time.Sleep(100 * time.Millisecond)
-		retries -= 1
-	}
-
-	for _, id := range s.Offline.ToSlice() {
-		fmt.Printf("setting CPU#%d  offline again...\n", id)
-		s.SetOffline(id, true)
-	}
-
-	return nil
+	return err
 }
 
 // DiscoverNodes discovers NUMA node topology/information from sysfs.
@@ -319,6 +316,8 @@ func (s *SystemInfo) SetOffline(cpuId int, offline bool) error {
 		f, err := os.OpenFile(filepath.Join(cpu.Path, "online"), os.O_WRONLY, 0)
 		if err != nil {
 			return fmt.Errorf("CPU#%d: can't set online/offline: %v", cpuId, err)
+		} else {
+			defer f.Close()
 		}
 
 		setting := []byte{' ', '\n'}
@@ -555,6 +554,15 @@ func (cpu *CpuInfo) CPUSet() cpuset.CPUSet {
 	return cpuset.NewCPUSet(cpu.Threads...)
 }
 
+// getCpuId returns the enumerated CPU id from the sysfs CPU directory name.
+func getCpuId(dir string) int {
+	if dir[0:3] == "cpu" {
+		return getNameEnumeration(dir)
+	}
+
+	return -1
+}
+
 // getNameEnumeration digs out the numeric id of the name of an enumerated object.
 func getNameEnumeration(name string) int {
 	name = filepath.Base(name)
@@ -661,6 +669,60 @@ func getSysfsEntry(base, path string, ptr interface{}) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported sysfs entry type %T", ptr)
 	}
+}
+
+// writeSysfsEntry writes the given value to the given sysfs entry.
+func writeSysfsEntry(base, path string, val interface{}, oldp interface{}) (string, error) {
+	var old string
+	var err error
+	var str string
+
+	f, err := os.OpenFile(filepath.Join(base, path), os.O_WRONLY, 0)
+	if err != nil {
+		return "", fmt.Errorf("%s: can't open sysfs entry for writing (%v)", filepath.Join(base, path), err)
+	} else {
+		defer f.Close()
+	}
+
+	if oldp != nil {
+		if old, err = getSysfsEntry(base, path, oldp); err != nil {
+			return "", err
+		}
+	}
+
+	switch val.(type) {
+	case int:
+		str = fmt.Sprintf("%d", val)
+
+	case string:
+		str = val.(string)
+
+	case bool:
+		if val.(bool) {
+			str = "1"
+		} else {
+			str = "0"
+		}
+
+	case []int:
+		sep := ""
+		for _, i := range val.([]int) {
+			str = fmt.Sprintf("%s%s%d", str, sep, i)
+			sep = ","
+		}
+
+	case []string:
+		str = strings.Join(val.([]string), ",")
+
+	default:
+		return "", fmt.Errorf("%s: unsupported type (%T) to write", filepath.Join(base, path), val)
+	}
+
+	if _, err = f.Write([]byte(str + "\n")); err != nil {
+		return "", err
+	}
+
+	return old, nil
 }
 
 //
