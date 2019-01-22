@@ -54,8 +54,8 @@ type CpuInfo struct {
 	PackageId int          // physical package id
 	Cores []int            // cores in the same package
 	Threads []int          // hyperthreads in the same core
-	MinFreq int            // lowest frequency if known
-	MaxFreq int            // highest frequency if known
+	MinFreq uint64         // lowest frequency if known
+	MaxFreq uint64         // highest frequency if known
 	Online bool            // whether CPU is online
 }
 
@@ -335,6 +335,50 @@ func (s *SystemInfo) SetOffline(cpuId int, offline bool) error {
 	return nil
 }
 
+// Set the CPU frequency scaling limits for the given CPU.
+func (s *SystemInfo) SetCpuFrequencyLimits(cpuId int, min, max uint64) error {
+	cpu, ok := s.Cpus[cpuId]
+	if !ok {
+		return fmt.Errorf("no CPU #%d", cpuId)
+	}
+
+	fmt.Printf("*** should set scaling frequency limits for CPU#%d to %d - %d...\n",
+		cpuId, min, max)
+
+	// silently ignore the request if there is no support for frequency scaling
+	if cpu.MinFreq == 0 {
+		return nil
+	}
+
+	if min != 0 {
+		if min < cpu.MinFreq {
+			min = cpu.MinFreq
+		}
+		if min > cpu.MaxFreq {
+			min = cpu.MaxFreq
+		}
+
+		if _, err := writeSysfsEntry(cpu.Path, "cpufreq/scaling_min_freq", min, nil); err != nil {
+			return fmt.Errorf("CPU #%d: failed to set scaling frequency lower limit: %v", err)
+		}
+	}
+
+	if max != 0 {
+		if max < cpu.MinFreq {
+			max = cpu.MinFreq
+		}
+		if max > cpu.MaxFreq {
+			max = cpu.MaxFreq
+		}
+
+		if _, err := writeSysfsEntry(cpu.Path, "cpufreq/scaling_max_freq", max, nil); err != nil {
+			return fmt.Errorf("CPU #%d: failed to set scaling frequency upper limit: %v", err)
+		}
+	}
+
+	return nil
+}
+
 // PackageCount returns the number of physical packages in the system.
 func (s *SystemInfo) PackageCount() int {
 	return len(s.Packages)
@@ -596,7 +640,32 @@ func getSysfsEntry(base, path string, ptr interface{}) (string, error) {
 	switch ptr.(type) {
 	case *int:
 		intp := ptr.(*int)
-		if *intp, err = strconv.Atoi(entry); err != nil {
+		if val, err := strconv.ParseInt(entry, 0, 0); err != nil {
+			return "", err
+		} else {
+			*intp = int(val)
+		}
+		return entry, nil
+
+	case *uint:
+		intp := ptr.(*uint)
+		if val, err := strconv.ParseUint(entry, 0, 0); err != nil {
+			return "", err
+		} else {
+			*intp = uint(val)
+		}
+		return entry, nil
+
+	case int64:
+		intp := ptr.(*int64)
+		if *intp, err = strconv.ParseInt(entry, 0, 64); err != nil {
+			return "", err
+		}
+		return entry, nil
+
+	case uint64:
+		uintp := ptr.(*uint64)
+		if *uintp, err = strconv.ParseUint(entry, 0, 64); err != nil {
 			return "", err
 		}
 		return entry, nil
@@ -692,6 +761,15 @@ func writeSysfsEntry(base, path string, val interface{}, oldp interface{}) (stri
 
 	switch val.(type) {
 	case int:
+		str = fmt.Sprintf("%d", val)
+
+	case uint:
+		str = fmt.Sprintf("%d", val)
+
+	case int64:
+		str = fmt.Sprintf("%d", val)
+
+	case uint64:
 		str = fmt.Sprintf("%d", val)
 
 	case string:
