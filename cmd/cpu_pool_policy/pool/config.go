@@ -18,6 +18,8 @@ package pool
 
 import (
 	"fmt"
+	"strings"
+	"strconv"
 	"io/ioutil"
 	"encoding/json"
 
@@ -39,6 +41,8 @@ type configFileEntry struct {
 	Cpus       string        `json:"cpuset,omitempty"`    // CPUs, if explicitly set
 	Isolated   bool          `json:"isolated,omitempty"`  // use isolated CPUs
 	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
+	MinFreq    string        `json:"minFreq,omitempty"`   // allowed min. CPU frequency, if overridden
+	MaxFreq    string        `json:"maxFreq,omitempty"`   // allowed max. CPU frequency, if overridden
 }
 
 // Runtime configuration for this node, with one entry per CPU pool.
@@ -50,6 +54,8 @@ type Config struct {
 	Cpus      *cpuset.CPUSet `json:"cpus,omitempty"`      // explicit CPUs to allocate, if given
 	Isolated   bool          `json:"isolated,omitempty"`  // use isolated CPUs
 	DisableHT  bool          `json:"disableHT,omitempty"` // take HT siblings offline
+	MinFreq    uint64        `json:"minFreq,omitempty"`   // allowed lowest CPU frequency, if overridden
+	MaxFreq    uint64        `json:"maxFreq,omitempty"`   // allowed lowest CPU frequency, if overridden
 }
 
 // cached isolated set of CPUs
@@ -191,6 +197,17 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 	pc.Isolated = entry.Isolated
 	pc.DisableHT = entry.DisableHT
 
+	if frq, err := parseCpuFreq(entry.MinFreq); err != nil {
+		return fmt.Errorf("pool %s: %v", pool, err)
+	} else {
+		pc.MinFreq = frq
+	}
+	if frq, err := parseCpuFreq(entry.MaxFreq); err != nil {
+		return fmt.Errorf("pool %s: %v", pool, err)
+	} else {
+		pc.MaxFreq = frq
+	}
+
 	switch entry.Cpus {
 	case "":
 		pc.CpuCount = entry.CpuCount
@@ -224,6 +241,39 @@ func (cfg NodeConfig) configure(pool string, entry configFileEntry) error {
 	return nil
 }
 
+// Parse CPU frequency given as a string, with an optional base suffix (k, M, G).
+func parseCpuFreq(freq string) (uint64, error) {
+	if freq == "" {
+		return uint64(0), nil
+	}
+
+	if idx := strings.LastIndexAny(freq, "kMG"); idx >= 0 {
+		unit := map[string]uint64{
+			"k": 1e3, "kHz": 1e3,
+			"M": 1e6, "MHz": 1e6,
+			"G": 1e9, "GHz": 1e9,
+		}
+
+		if base, ok := unit[freq[idx:]]; !ok {
+			return 0, fmt.Errorf("invalid CPU frequency base in %s", freq)
+		} else {
+			val, err := strconv.ParseUint(freq[0:idx], 0, 64)
+			if err != nil {
+				return 0, fmt.Errorf("invalid CPU frequency value %s", freq)
+			}
+
+			return val * base, nil
+		}
+	} else {
+		val, err := strconv.ParseUint(freq, 0, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid CPU frequency %s", freq)
+		}
+
+		return val, nil
+	}
+}
+
 // Return pool configuration as a string.
 func (cfg *Config) String() string {
 	if cfg == nil {
@@ -251,7 +301,12 @@ func (cfg *Config) String() string {
 		}
 	}
 
-	return "<" + isolation + cpus + htconfig + ">"
+	freqs := ""
+	if cfg.MinFreq != 0 || cfg.MaxFreq != 0 {
+		freqs = fmt.Sprintf(", CPU freq.: %d-%d", cfg.MinFreq, cfg.MaxFreq)
+	}
+
+	return "<" + isolation + cpus + htconfig + freqs + ">"
 }
 
 // Format an error message related to configuration.

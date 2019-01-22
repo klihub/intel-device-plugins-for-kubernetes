@@ -440,14 +440,6 @@ func (ps *PoolSet) reconcileConfig() error {
 
 // Update container CPU allocations after a configuratio change.
 func (ps *PoolSet) updateAllocations() error {
-	//
-	// Notes:
-	//    We currently reject non-trivial configuration changes. Hence, there
-	//    is nothing to do here ATM...
-	//
-
-	return nil
-
 	// reset all exclusive pool allocations
 	for pool, p := range ps.pools {
 		log.Info("pool %s: resetting exclusive allocations...", pool)
@@ -480,6 +472,14 @@ func (ps *PoolSet) updateHwConfiguration() error {
 		}
 		if err := ps.sys.SetOffline(id, offline); err != nil {
 			log.Warning("%s", err)
+		}
+	}
+
+	for _, p := range ps.pools {
+		if p.cfg.MinFreq != 0 || p.cfg.MaxFreq != 0 {
+			log.Info("*** should set CPU frequencies of %s to %d - %d...",
+				p.shared.Union(p.pinned).String(),
+				p.cfg.MinFreq, p.cfg.MaxFreq)
 		}
 	}
 
