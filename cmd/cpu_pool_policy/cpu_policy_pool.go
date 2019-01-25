@@ -22,6 +22,8 @@ import (
 	"sync"
 	"path/filepath"
 
+	"github.com/golang/glog"
+
 	"github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/pool"
 	metrics "github.com/intel/intel-device-plugins-for-kubernetes/cmd/cpu_pool_policy/statistics"
 	"k8s.io/api/core/v1"
@@ -368,8 +370,31 @@ func getPluginConfig() *pluginConfig {
 	return &cfg
 }
 
+type glogBackend struct {}
+
+func (glb *glogBackend) Infof(format string, args ...interface{}) {
+	glog.InfoDepth(2, log.Format(format, args...))
+}
+
+func (glb *glogBackend) InfoDepth(level int, args ...interface{}) {
+	glog.InfoDepth(level, args...)
+}
+
+func (glb *glogBackend) WarningDepth(level int, args ...interface{}) {
+	glog.WarningDepth(level, args...)
+}
+
+func (glb *glogBackend) ErrorDepth(level int, args ...interface{}) {
+	glog.ErrorDepth(level, args...)
+}
+
+func (glb *glogBackend) FatalDepth(level int, args ...interface{}) {
+	glog.FatalDepth(level, args...)
+}
+
 // Start up the pool CPU policy.
 func main() {
+	stub.SetBackend(&glogBackend{})
 	cfg := getPluginConfig()
 	plugin := NewPoolPolicy(cfg)
 
