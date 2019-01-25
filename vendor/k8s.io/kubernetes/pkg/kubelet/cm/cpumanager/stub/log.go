@@ -20,12 +20,11 @@ import (
 )
 
 type logger struct {
-	prefix string
+	prefix  string
 }
 
 type Logger interface {
 	Format(format string, args ...interface{}) string
-	Message(level klog.Level, format string, args ...interface{})
 	Info(format string, args ...interface{})
 	Warning(format string, args ...interface{})
 	Error(format string, args ...interface{})
@@ -33,39 +32,72 @@ type Logger interface {
 	Panic(format string, args ...interface{})
 }
 
+type Backend interface {
+	Infof(string, ...interface{})
+	InfoDepth(int, ...interface{})
+	WarningDepth(int, ...interface{})
+	ErrorDepth(int, ...interface{})
+	FatalDepth(int, ...interface{})
+}
+
+type klogBackend struct {}
+
+var _ Backend = &klogBackend{}
 var _ Logger = &logger{}
+
+var backend Backend = &klogBackend{}
 
 func NewLogger(prefix string) Logger {
 	return &logger{ prefix: prefix }
+}
+
+func SetBackend(be Backend) {
+	backend = be
 }
 
 func (log *logger) Format(format string, args ...interface{}) string {
 	return fmt.Sprintf(log.prefix + format, args...)
 }
 
-func (log *logger) Message(level klog.Level, format string, args ...interface{}) {
-	if !klog.V(level) {
-		klog.InfoDepth(1, log.Format(format, args...))
-	}
-}
-
 func (log *logger) Info(format string, args ...interface{}) {
-	klog.InfoDepth(1, log.Format(format, args...))
+	backend.Infof(log.Format(format, args...))
 }
 
 func (log *logger) Warning(format string, args ...interface{}) {
-	klog.WarningDepth(1, log.Format(format, args...))
+	backend.WarningDepth(2, log.Format(format, args...))
 }
 
 func (log *logger) Error(format string, args ...interface{}) {
-	klog.ErrorDepth(1, log.Format(format, args...))
+	backend.ErrorDepth(2, log.Format(format, args...))
 }
 
 func (log *logger) Fatal(format string, args ...interface{}) {
-	klog.FatalDepth(1, log.Format(format, args...))
+	backend.FatalDepth(2, log.Format(format, args...))
 }
 
 func (log *logger) Panic(format string, args ...interface{}) {
 	msg := log.Format(format, args...)
 	panic(msg)
 }
+
+
+func (klb *klogBackend) Infof(format string, args ...interface{}) {
+	klog.InfoDepth(2, log.Format(format, args...))
+}
+
+func (klb *klogBackend) InfoDepth(level int, args ...interface{}) {
+	klog.InfoDepth(level, args...)
+}
+
+func (klb *klogBackend) WarningDepth(level int, args ...interface{}) {
+	klog.WarningDepth(level, args...)
+}
+
+func (klb *klogBackend) ErrorDepth(level int, args ...interface{}) {
+	klog.ErrorDepth(level, args...)
+}
+
+func (klb *klogBackend) FatalDepth(level int, args ...interface{}) {
+	klog.FatalDepth(level, args...)
+}
+
