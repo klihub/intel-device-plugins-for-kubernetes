@@ -16,7 +16,7 @@ package stub
 
 import (
 	"fmt"
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 type logger struct {
@@ -25,7 +25,7 @@ type logger struct {
 
 type Logger interface {
 	Format(format string, args ...interface{}) string
-	Message(level glog.Level, format string, args ...interface{})
+	Message(level klog.Level, format string, args ...interface{})
 	Info(format string, args ...interface{})
 	Warning(format string, args ...interface{})
 	Error(format string, args ...interface{})
@@ -43,26 +43,26 @@ func (log *logger) Format(format string, args ...interface{}) string {
 	return fmt.Sprintf(log.prefix + format, args...)
 }
 
-func (log *logger) Message(level glog.Level, format string, args ...interface{}) {
-	if !glog.V(level) {
-		glog.InfoDepth(1, log.Format(format, args...))
+func (log *logger) Message(level klog.Level, format string, args ...interface{}) {
+	if !klog.V(level) {
+		klog.InfoDepth(1, log.Format(format, args...))
 	}
 }
 
 func (log *logger) Info(format string, args ...interface{}) {
-	glog.InfoDepth(1, log.Format(format, args...))
+	klog.InfoDepth(1, log.Format(format, args...))
 }
 
 func (log *logger) Warning(format string, args ...interface{}) {
-	glog.WarningDepth(1, log.Format(format, args...))
+	klog.WarningDepth(1, log.Format(format, args...))
 }
 
 func (log *logger) Error(format string, args ...interface{}) {
-	glog.ErrorDepth(1, log.Format(format, args...))
+	klog.ErrorDepth(1, log.Format(format, args...))
 }
 
 func (log *logger) Fatal(format string, args ...interface{}) {
-	glog.FatalDepth(1, log.Format(format, args...))
+	klog.FatalDepth(1, log.Format(format, args...))
 }
 
 func (log *logger) Panic(format string, args ...interface{}) {
