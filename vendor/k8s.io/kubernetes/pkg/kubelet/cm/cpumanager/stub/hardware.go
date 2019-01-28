@@ -144,7 +144,7 @@ func (s *SystemInfo) setCPUSetState(state bool, cset *cpuset.CPUSet) (cpuset.CPU
 		var online bool
 
 		id := getCpuId(cpu.Name())
-		if id < 0 {
+		if id <= 0 {          // skip CPU#0 as well as it can't be offlined
 			continue
 		}
 
@@ -172,7 +172,7 @@ func (s *SystemInfo) DiscoverCpus() error {
 
 	offline, err := s.setCPUSetState(true, nil)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	path := filepath.Join(s.Path, "cpu")
