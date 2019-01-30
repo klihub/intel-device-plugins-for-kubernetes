@@ -342,15 +342,14 @@ func (s *SystemInfo) SetCpuFrequencyLimits(cpuId int, min, max uint64) error {
 		return fmt.Errorf("no CPU #%d", cpuId)
 	}
 
-	fmt.Printf("*** should set scaling frequency limits for CPU#%d to %d - %d...\n",
-		cpuId, min, max)
-
 	// silently ignore the request if there is no support for frequency scaling
 	if cpu.MinFreq == 0 {
 		return nil
 	}
 
 	if min != 0 {
+		min /= 1000
+
 		if min < cpu.MinFreq {
 			min = cpu.MinFreq
 		}
@@ -364,6 +363,8 @@ func (s *SystemInfo) SetCpuFrequencyLimits(cpuId int, min, max uint64) error {
 	}
 
 	if max != 0 {
+		max /= 1000
+
 		if max < cpu.MinFreq {
 			max = cpu.MinFreq
 		}
@@ -656,14 +657,14 @@ func getSysfsEntry(base, path string, ptr interface{}) (string, error) {
 		}
 		return entry, nil
 
-	case int64:
+	case *int64:
 		intp := ptr.(*int64)
 		if *intp, err = strconv.ParseInt(entry, 0, 64); err != nil {
 			return "", err
 		}
 		return entry, nil
 
-	case uint64:
+	case *uint64:
 		uintp := ptr.(*uint64)
 		if *uintp, err = strconv.ParseUint(entry, 0, 64); err != nil {
 			return "", err
