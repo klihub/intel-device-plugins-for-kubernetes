@@ -477,9 +477,9 @@ func (ps *PoolSet) updateHwConfiguration() error {
 
 	for _, p := range ps.pools {
 		if p.cfg.MinFreq != 0 || p.cfg.MaxFreq != 0 {
-			log.Info("*** should set CPU frequencies of %s to %d - %d...",
-				p.shared.Union(p.pinned).String(),
-				p.cfg.MinFreq, p.cfg.MaxFreq)
+			for _, id := range p.shared.Union(p.pinned).ToSlice() {
+				ps.sys.SetCpuFrequencyLimits(id, p.cfg.MinFreq, p.cfg.MaxFreq)
+			}
 		}
 	}
 
