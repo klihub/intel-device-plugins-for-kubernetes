@@ -15,34 +15,48 @@
 package sysfs
 
 import (
-//	"fmt"
+	"sync"
 )
 
 const (
-	defaultMountPath = "/sys"          // default sysfs mount path
+	defaultSysfsPath = "/sys"          // default sysfs mount path
 )
 
-type SysFs interface {
-	DiscoverCpus() error
-	KernelCmdline
+// sysfs interface
+type Sysfs interface {
 }
 
+// sysfs state
 type sysfs struct {
 	path string
-	kernelCmdline
 }
 
-var _ SysFs = &sysfs{}
-var mountPath string = defaultMountPath
+// make sure sysfs implements the SysFs
+var _ Sysfs = &sysfs{}
 
-func SetMountPath(path string) {
-	mountPath = path
+// sysfs singleton instance
+var sys *sysfs
+var once sync.Once
+
+// sysfs mount path
+var sysfsPath string = defaultSysfsPath
+
+
+// Override the default sysfs mount path.
+func SetSysfsPath(path string) string {
+	oldPath := sysfsPath
+	sysfsPath = path
+	return oldPath
 }
 
-func GetSysFs() SysFs {
-	return &sysfs{}
+// Get the sysfs singleton instance.
+func GetSysfs() Sysfs {
+	once.Do(func () {
+		sys = &sysfs{
+			path: sysfsPath,
+		}
+	})
+
+	return sys
 }
 
-func (sys *sysfs) DiscoverCpus() error {
-	return nil
-}
