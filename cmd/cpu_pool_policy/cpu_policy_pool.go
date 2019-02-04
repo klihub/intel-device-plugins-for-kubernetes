@@ -352,13 +352,22 @@ func (p *poolPolicy) createMetricsApi() (*metrics.Stat, error) {
 	return metrics.NewStat(p.pluginCfg.NodeName, p.pluginCfg.MetricSpace, client), nil
 }
 
+// Get hostname, allow overriding with NODE_NAME environment variable.
+func getHostname() string {
+	if name, err := utilnode.GetHostname(os.Getenv("NODE_NAME")); err != nil {
+		return ""
+	} else {
+		return name
+	}
+}
+
 // Parse the command line for configuration options.
 func getPluginConfig() *pluginConfig {
 	cfg := pluginConfig{}
 
 	flag.StringVar(&cfg.ConfigDir, "config", configDir,
 		"absolute path to CPU pool plugin configuration directory, expecting ConfigMap-style configuration")
-	flag.StringVar(&cfg.NodeName, "node", utilnode.GetHostname(os.Getenv("NODE_NAME")),
+	flag.StringVar(&cfg.NodeName, "node", getHostname(),
 		"override node name to pick configuration for")
 	flag.StringVar(&cfg.KubeConfig, "kube-config", filepath.Join(os.Getenv("HOME"), ".kube", "config"),
 		"override path to kube configuration when not running as a pod")
