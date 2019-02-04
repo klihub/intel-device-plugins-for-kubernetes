@@ -19,7 +19,7 @@ package cpuset
 import (
 	"bytes"
 	"fmt"
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"reflect"
 	"sort"
 	"strconv"
@@ -221,7 +221,7 @@ func (s CPUSet) String() string {
 func MustParse(s string) CPUSet {
 	res, err := Parse(s)
 	if err != nil {
-		glog.Fatalf("unable to parse [%s] as CPUSet: %v", s, err)
+		klog.Fatalf("unable to parse [%s] as CPUSet: %v", s, err)
 	}
 	return res
 }
@@ -295,7 +295,7 @@ func (s CPUSet) MarshalJSON() ([]byte, error) {
 // Unmarshal CPUSet from JSON.
 func (s *CPUSet) UnmarshalJSON(b []byte) error {
 	if !s.IsEmpty() {
-		glog.Fatalf("CPUset (%s) not empty, won't unmarshal into it", s.String())
+		klog.Fatalf("CPUset (%s) not empty, won't unmarshal into it", s.String())
 	}
 
 	if len(b) == 0 {

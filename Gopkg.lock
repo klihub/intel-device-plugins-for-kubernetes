@@ -49,6 +49,12 @@
   revision = "e89373fe6b4a7413d7acd6da1725b83ef713e6e4"
 
 [[projects]]
+  name = "github.com/google/cadvisor"
+  packages = ["info/v1"]
+  revision = "8949c822ea91fa6b4996614a5ad6ade840be24ee"
+  version = "v0.32.0"
+
+[[projects]]
   branch = "master"
   name = "github.com/google/gofuzz"
   packages = ["."]
@@ -468,15 +474,21 @@
   revision = "e3762e86a74c878ffed47484592986685639c2cd"
 
 [[projects]]
+  branch = "hacking/v1.13.2"
   name = "k8s.io/kubernetes"
   packages = [
+    "pkg/apis/core",
     "pkg/features",
     "pkg/kubelet/apis",
+    "pkg/kubelet/apis/cpuplugin/v1draft1",
     "pkg/kubelet/apis/deviceplugin/v1beta1",
+    "pkg/kubelet/cm/cpumanager/stub",
+    "pkg/kubelet/cm/cpumanager/topology",
+    "pkg/kubelet/cm/cpuset",
     "pkg/util/node"
   ]
-  revision = "721bfa751924da8d1680787490c54b9179b1fed0"
-  version = "v1.13.3"
+  revision = "bb20f9f292b58a2aa1491fa1c9481561cefbc72e"
+  source = "https://github.com/klihub/kubernetes.git"
 
 [[projects]]
   branch = "master"
@@ -496,6 +508,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "d8dbbad3f666eb2362a3b6a440298080854d9b479d182c7d036ad097b6dbaa35"
+  inputs-digest = "220151e92e4e24979ab9bffcbd2818db29f7e8bf85aa8fc63ffaea46276867f1"
   solver-name = "gps-cdcl"
   solver-version = 1
