@@ -39,7 +39,8 @@ ignored = ["k8s.io/code-generator"]
 
 [[constraint]]
   name = "k8s.io/kubernetes"
-  version = "1.13.2"
+  branch = "hacking/v1.13.2"
+  source = "https://github.com/klihub/kubernetes.git"
 
 [[constraint]]
   name = "k8s.io/apimachinery"
