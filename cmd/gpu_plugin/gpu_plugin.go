@@ -42,6 +42,9 @@ const (
 	// Device plugin settings.
 	namespace  = "gpu.intel.com"
 	deviceType = "i915"
+
+	// Environment variable to turn on debugging
+	debugEnvVar = "INTEL_GPU_PLUGIN_DEBUG"
 )
 
 type devicePlugin struct {
@@ -143,6 +146,10 @@ func main() {
 	flag.IntVar(&sharedDevNum, "shared-dev-num", 1, "number of containers sharing the same GPU device")
 	flag.BoolVar(&debugEnabled, "debug", false, "enable debug output")
 	flag.Parse()
+
+	if !debugEnabled {
+		_, debugEnabled = os.LookupEnv(debugEnvVar)
+	}
 
 	if debugEnabled {
 		debug.Activate()
